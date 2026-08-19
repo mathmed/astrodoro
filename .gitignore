@@ -1,0 +1,41 @@
+# ambiente
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+
+# SDK e cabeçalho da SVBony: binário de terceiro, não é nosso para redistribuir.
+# `make sdk` recria a partir da instalação local.
+vendor/
+
+# Dados baixados por script, grandes demais para o repositório.
+# `make catalog` e `make indexes` recriam.
+data/NGC.csv
+data/indexes/
+
+# Configuração do solver: contém caminho absoluto desta máquina.
+# `scripts/setup_sdk.sh` e o Makefile recriam.
+data/astrometry.cfg
+
+# Dumps de parâmetro que a SDK da SVBony escreve no diretório de trabalho
+*_Cfg_*.bin
+
+# Saídas de sessão
+sessions/
+session/
+replay/
+captures/
+darks/
+flats/
+
+# Imagens e dados de captura em geral
+*.fits
+*.fit
+*.fts
+*.npy
+*.ser
+*.png
+*.tif
+*.tiff
+!docs/**/*.png

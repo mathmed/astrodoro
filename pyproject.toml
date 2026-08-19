@@ -1,0 +1,19 @@
+[project]
+name = "octans"
+version = "0.1.0"
+description = "Captura e live stacking para EAA no macOS"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "astropy>=6.0",
+    "opencv-python>=4.9",
+    "astroalign>=2.5",
+    # PySide6 completo, e não o Essentials, apesar dos ~800 MB a mais.
+    # Tentado e revertido: o Essentials não traz QtMultimedia (usado pelos
+    # bipes de foco) e o pyqtgraph quebra porque espera PySide6.__version__,
+    # que só o pacote guarda-chuva define. Contornar os dois seria dois
+    # remendos frágeis num programa que roda no campo.
+    "PySide6>=6.6",
+    "pyqtgraph>=0.13",
+]
