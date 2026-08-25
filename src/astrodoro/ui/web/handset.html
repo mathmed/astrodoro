@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Astrodoro — sensor</title>
+<style>
+/* This page is not an interface: it is a sensor with a status light. Everything
+   you do, you do on the laptop. It exists because the device orientation is
+   only readable from inside a browser.
+
+   Red on black because the phone is strapped to the tube, 30 cm from the eye
+   you want to keep dark-adapted. */
+:root { --r:#c8281e; --r2:#7a1812; --dim:#4a0f0b; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; height:100%; background:#000; color:var(--r);
+  font:600 17px/1.35 -apple-system,system-ui,sans-serif; overscroll-behavior:none;
+  user-select:none; -webkit-user-select:none; }
+body { display:flex; flex-direction:column; padding:env(safe-area-inset-top) 14px 14px; }
+h1 { font-size:14px; letter-spacing:.2em; margin:12px 0 2px; color:var(--r2); }
+#status { font-size:14px; color:var(--r2); }
+#light { display:inline-block; width:10px; height:10px; border-radius:50%;
+  background:var(--dim); margin-right:7px; vertical-align:1px; }
+#light.on { background:var(--r); }
+.centre { flex:1; display:flex; flex-direction:column; justify-content:center; gap:14px; }
+.line { display:flex; justify-content:space-between; align-items:baseline;
+  border-bottom:1px solid var(--dim); padding-bottom:6px; }
+.tag { font-size:12px; letter-spacing:.14em; color:var(--r2); }
+.val { font:700 44px/1 ui-monospace,monospace; }
+button { width:100%; padding:22px; background:#140301; color:var(--r);
+  border:2px solid var(--r2); border-radius:12px; font:700 19px/1.25 inherit; }
+button:active { background:var(--dim); }
+#allow { display:none; }
+.notice { color:var(--r2); font-size:13px; min-height:34px; }
+</style>
+</head>
+<body>
+
+<h1>ASTRODORO · SENSOR</h1>
+<div id="status"><span id="light"></span>connecting…</div>
+
+<button id="allow">TAP ONCE TO ENABLE THE SENSOR</button>
+
+<div class="centre">
+  <div class="line"><span class="tag">ALTITUDE</span><span class="val" id="alt">—</span></div>
+  <div class="line"><span class="tag">AZIMUTH</span><span class="val" id="az">—</span></div>
+</div>
+
+<div class="notice" id="notice">leave this screen open — everything else is on the laptop</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws = null, hasSensor = false, last = 0, compass = null;
+
+function connect() {
+  ws = new WebSocket("wss://" + location.host + "/");
+  ws.onopen = () => {
+    $("light").className = "on";
+    $("status").innerHTML = '<span id="light" class="on"></span>connected to the laptop';
+    ws.send(JSON.stringify({type:"hello", ua:navigator.userAgent}));
+  };
+  ws.onclose = () => {
+    $("status").innerHTML = '<span id="light"></span>reconnecting…';
+    setTimeout(connect, 1200);
+  };
+  ws.onerror = () => { try { ws.close(); } catch(e){} };
+  /* The laptop echoes back the alt/az already corrected by the alignment: it is
+     the return path that proves, with your eye on the tube, that the whole
+     chain is alive. */
+  ws.onmessage = ev => {
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.alt !== undefined) $("alt").textContent = m.alt.toFixed(1) + "°";
+      if (m.az  !== undefined) $("az").textContent  = m.az.toFixed(1) + "°";
+      if (m.notice !== undefined) $("notice").textContent = m.notice;
+    } catch(e){}
+  };
+}
+
+/* ~20 samples per second. The event arrives at 60 Hz on iOS and it does not
+   help: the tube is pushed by hand, it does not vibrate at 60 Hz, and the
+   surplus only fills the WebSocket queue. */
+function onOrient(e) {
+  if (e.alpha === null && e.beta === null) return;
+  hasSensor = true;
+  if (typeof e.webkitCompassHeading === "number") compass = 360 - e.webkitCompassHeading;
+  const t = performance.now();
+  if (t - last < 50) return;
+  last = t;
+  if (ws && ws.readyState === 1)
+    ws.send(JSON.stringify({type:"o", a:e.alpha||0, b:e.beta||0, g:e.gamma||0, c:compass}));
+}
+
+function onAbsolute(e) { if (e.alpha !== null && e.absolute) compass = e.alpha; }
+
+function enable() {
+  window.addEventListener("deviceorientation", onOrient);
+  if ("ondeviceorientationabsolute" in window)
+    window.addEventListener("deviceorientationabsolute", onAbsolute);
+  setTimeout(() => {
+    if (!hasSensor)
+      $("notice").textContent = "no sensor reading — either the browser does not "
+        + "expose orientation, or the page is not on https.";
+  }, 2500);
+}
+
+/* The only tap on this page, and it is Safari's, not ours: iOS requires a
+   gesture to release the sensor, and the call has to happen inside the tap
+   handler itself — deferring it with await breaks the permission. */
+if (typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission === "function") {
+  $("allow").style.display = "block";
+  $("allow").onclick = () => {
+    DeviceOrientationEvent.requestPermission().then(r => {
+      if (r === "granted") { $("allow").style.display = "none"; enable(); }
+      else $("notice").textContent = "permission denied — reload and tap again";
+    }).catch(() => { $("notice").textContent = "could not request permission"; });
+    keepAwake();
+  };
+} else {
+  enable();
+  window.addEventListener("click", keepAwake, {once:true});
+}
+
+/* Without this the screen goes dark in 30 s, the system suspends the events and
+   the position freezes without warning — it looks like the program hung. */
+let lock = null;
+async function keepAwake() {
+  try { lock = await navigator.wakeLock.request("screen"); } catch(e){}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") keepAwake();
+});
+
+connect();
+</script>
+</body>
+</html>

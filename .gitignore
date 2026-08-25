@@ -1,35 +1,49 @@
-# ambiente
+# environment
 .venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 .DS_Store
+*.egg-info/
+build/
+dist/
 
-# SDK e cabeçalho da SVBony: binário de terceiro, não é nosso para redistribuir.
-# `make sdk` recria a partir da instalação local.
+# SVBony SDK and header: a third party binary, not ours to redistribute.
+# `make sdk` recreates it from a local installation.
 vendor/
 
-# Dados baixados por script, grandes demais para o repositório.
-# `make catalog` e `make indexes` recriam.
+# Catalogue downloaded by script, too large for the repository.
+# `make catalog` recreates it.
 data/NGC.csv
-data/indexes/
 
-# Configuração do solver: contém caminho absoluto desta máquina.
-# `scripts/setup_sdk.sh` e o Makefile recriam.
-data/astrometry.cfg
-
-# Dumps de parâmetro que a SDK da SVBony escreve no diretório de trabalho
-*_Cfg_*.bin
-
-# Saídas de sessão
+# Capture output. It defaults to ~/Astrodoro, but the folders are configurable
+# and a developer may point them back into the checkout.
 sessions/
+darks/
+flats/
+exports/
+
+# Legacy output folders: earlier versions wrote here, relative to the working
+# directory. Nothing does any more; kept so an upgraded checkout cannot commit
+# leftovers by accident.
 session/
 replay/
 captures/
-darks/
-flats/
 
-# Imagens e dados de captura em geral
+# Parameter dumps the SVBony SDK writes into the working directory.
+*_Cfg_*.bin
+
+# Compiled translation catalogues: generated from the .po files by `make i18n`.
+*.mo
+
+# TLS certificate for the phone sensor. The private key belongs to one machine
+# and the certificate carries its IP; pointing/handset.py regenerates both.
+# They now live in the user data directory, but old checkouts may still have
+# them here.
+*.pem
+
+# Capture images and data in general
 *.fits
 *.fit
 *.fts
@@ -39,3 +53,14 @@ flats/
 *.tif
 *.tiff
 !docs/**/*.png
+
+# Brand assets are repository content, not capture output. Negated per
+# extension rather than with `!assets/**`, which would also un-ignore
+# assets/.DS_Store — the last matching pattern wins.
+!assets/*.png
+!assets/*.tif
+!assets/*.tiff
+
+# The app icon the program loads at runtime. Derived by
+# scripts/derive_brand.py, but committed: it ships inside the wheel.
+!src/astrodoro/ui/assets/*.png

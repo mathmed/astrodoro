@@ -1,4 +1,4 @@
-# Atalhos do projeto. `make` sozinho lista tudo.
+# Project shortcuts. `make` on its own lists everything.
 PY      := .venv/bin/python
 EXP     ?= 5
 GAIN    ?= 250
@@ -7,106 +7,106 @@ FRAMES  ?= 20
 TEMP    ?=
 DARK    ?=
 OUT     ?=
-PASTA   ?=
+FOLDER  ?=
 
 TEMPARG := $(if $(TEMP),--target-temp $(TEMP),)
 DARKARG := $(if $(DARK),--dark $(DARK),)
 OUTARG  := $(if $(OUT),--out $(OUT),)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup sdk catalog indexes gui probe info usb bench tec dark flat \
-        run replay solve test lint clean distclean
+.PHONY: help setup sdk catalog gui probe info usb bench tec dark flat \
+        run replay handset settings bundle brand test lint fmt i18n clean distclean
 
-help:  ## mostra esta lista
-	@echo "octans — captura e live stacking para EAA"
+help:  ## show this list
+	@echo "Astrodoro — capture and live stacking for EAA"
 	@echo
 	@grep -hE '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-11s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "variáveis:  EXP=$(EXP)  GAIN=$(GAIN)  BIN=$(BIN)  FRAMES=$(FRAMES)"
-	@echo "            TEMP=  DARK=  OUT=  PASTA="
-	@echo "exemplo:    make dark EXP=5 GAIN=250 TEMP=-10"
+	@echo "variables:  EXP=$(EXP)  GAIN=$(GAIN)  BIN=$(BIN)  FRAMES=$(FRAMES)"
+	@echo "            TEMP=  DARK=  OUT=  FOLDER="
+	@echo "example:    make dark EXP=5 GAIN=250 TEMP=-10"
 
-# ---------------------------------------------------------------- preparação
-setup: ## cria o venv, prepara a SDK e baixa o catálogo
-	uv sync
+# --------------------------------------------------------------------- setup
+setup: ## create the venv, prepare the SDK and download the catalogue
+	uv sync --extra dev
 	$(MAKE) sdk
 	$(MAKE) catalog
-	@echo "pronto. 'make gui' para abrir."
+	@echo "ready. 'make gui' to open it."
 
-sdk: ## copia e ajusta a dylib arm64 da SVBony
+sdk: ## copy and fix up the SVBony arm64 dylib
 	scripts/setup_sdk.sh
 
-catalog: ## baixa o OpenNGC (catálogo de objetos)
-	scripts/get_catalog.sh
+catalog: ## download OpenNGC (the deep-sky object catalogue)
+	$(PY) -m astrodoro.cli catalog
 
-indexes: ## baixa os índices do plate solver (~123 MB)
-	scripts/get_indexes.sh minimo
+# ----------------------------------------------------------------------- use
+gui: ## open the interface
+	$(PY) -m astrodoro.ui
 
-# ---------------------------------------------------------------- uso
-gui: ## abre a interface
-	$(PY) gui.py
-
-probe: ## diagnóstico da câmera
-	$(PY) probe.py info
+probe: ## camera diagnostics
+	$(PY) -m astrodoro.cli info
 
 info: probe
 
-usb: ## diagnóstico do caminho USB
-	$(PY) probe.py usb
+usb: ## USB path diagnostics
+	$(PY) -m astrodoro.cli usb
 
-bench: ## mede throughput real
-	$(PY) probe.py bench --bin $(BIN)
+bench: ## measure real throughput
+	$(PY) -m astrodoro.cli bench --bin $(BIN)
 
-tec: ## monitora a refrigeração (TEMP=-10)
-	$(PY) probe.py tec --target $(if $(TEMP),$(TEMP),-10)
+tec: ## monitor the cooler (TEMP=-10)
+	$(PY) -m astrodoro.cli tec --target $(if $(TEMP),$(TEMP),-10)
 
-sensor: ## acha o salto de ganho e o offset mínimo (tampe o sensor)
-	$(PY) stack.py sensor --bin $(BIN)
+sensor: ## find the gain step and the minimum offset (cap the sensor)
+	$(PY) -m astrodoro.cli sensor --bin $(BIN)
 
-dark: ## master dark (tampe o sensor)
-	$(PY) stack.py dark --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
+dark: ## master dark (cap the sensor)
+	$(PY) -m astrodoro.cli dark --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
 	  --frames $(FRAMES) $(TEMPARG) $(OUTARG)
 
-flat: ## master flat (superfície uniformemente iluminada)
-	$(PY) stack.py flat --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
+flat: ## master flat (evenly illuminated surface)
+	$(PY) -m astrodoro.cli flat --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
 	  --frames $(FRAMES) $(DARKARG) $(OUTARG)
 
-run: ## sessão de live stacking sem interface
-	$(PY) stack.py run --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
+run: ## headless live stacking session
+	$(PY) -m astrodoro.cli run --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
 	  $(DARKARG) $(OUTARG)
 
-replay: ## reprocessa uma sessão gravada (PASTA=sessions/...)
-	@test -n "$(PASTA)" || { echo "uso: make replay PASTA=sessions/2026-08-18/2130_M8"; exit 1; }
-	$(PY) stack.py replay $(PASTA) $(DARKARG) $(OUTARG)
+replay: ## reprocess a recorded session (FOLDER=~/Astrodoro/sessions/...)
+	@test -n "$(FOLDER)" || { echo "usage: make replay FOLDER=~/Astrodoro/sessions/2026-08-18/2130_M8"; exit 1; }
+	$(PY) -m astrodoro.cli replay $(FOLDER) $(DARKARG) $(OUTARG)
 
-# ---------------------------------------------------------------- manutenção
-solve: ## verifica se o plate solver está instalado e configurado
-	@$(PY) -c "import sys; sys.path.insert(0,'.'); \
-from octans.platesolve import solvers_available, install_hint, LOCAL_CFG; \
-a=solvers_available(); \
-[print(f'  {k:<16} {v or chr(45)}') for k,v in a.items()]; \
-print(f'  cfg local        {LOCAL_CFG if LOCAL_CFG.exists() else chr(45)}'); \
-print() if any(a.values()) else print(install_hint())"
-	@ls -la data/indexes/*.fits 2>/dev/null || echo "  sem índices — rode 'make indexes'"
+settings: ## show the stored settings
+	$(PY) -m astrodoro.cli settings
 
-test: ## roda os testes
-	$(PY) tests/test_warp_direction.py
-	$(PY) tests/test_stack_synthetic.py
+# --------------------------------------------------------------- development
+bundle: ## build build/Astrodoro.app, so macOS names the program properly
+	$(PY) scripts/make_app.py
 
-lint: ## verifica que todos os módulos importam
-	@$(PY) -c "import sys; sys.path.insert(0,'.'); import importlib; \
-mods='svbony.sdk svbony.camera octans.source octans.recorder \
-octans.debayer octans.stars octans.register octans.stacker \
-octans.stretch octans.background octans.focus octans.platform \
-octans.polar octans.platesolve octans.catalog octans.pushto \
-octans.cooling ui.design ui.icons ui.audio ui.worker ui.main'.split(); \
-[importlib.import_module(m) for m in mods]; \
-print(f'{len(mods)} módulos importam sem erro')"
+brand: ## re-derive the logo and icon variants from the masters
+	$(PY) scripts/derive_brand.py
 
-clean: ## remove caches e saídas temporárias
+handset: ## fake phone, to work on push-to without going outside
+	$(PY) scripts/fake_handset.py
+
+test: ## run the test suite
+	$(PY) -m pytest
+
+lint: ## ruff check plus a stale-catalogue check
+	$(PY) -m ruff check src tests scripts
+	$(PY) scripts/extract_messages.py --check
+
+fmt: ## apply the fixes ruff can make on its own
+	$(PY) -m ruff check --fix src tests scripts
+
+i18n: ## refresh the .pot and report what pt_BR still lacks
+	$(PY) scripts/extract_messages.py
+	-$(PY) scripts/extract_messages.py --missing pt_BR
+
+clean: ## remove caches
 	find . -name __pycache__ -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
-	rm -rf session replay .pytest_cache
+	rm -rf .pytest_cache .ruff_cache
 
-distclean: clean ## remove também o venv e os dados baixados
-	rm -rf .venv data/indexes vendor/lib
+distclean: clean ## also remove the venv and the downloaded data
+	rm -rf .venv vendor/lib data/NGC.csv

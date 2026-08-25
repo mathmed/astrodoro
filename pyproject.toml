@@ -1,19 +1,116 @@
 [project]
-name = "octans"
-version = "0.1.0"
-description = "Captura e live stacking para EAA no macOS"
+name = "astrodoro"
+# Single-sourced from src/astrodoro/__init__.py, so `astrodoro --version` and
+# the wheel can never disagree. They did: the file said 0.2.0 while this said
+# 0.1.0, and only a wheel build would have shown it.
+dynamic = ["version"]
+description = "Capture and live stacking for electronically assisted astronomy on macOS"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Mateus Medeiros" }]
+keywords = ["astronomy", "eaa", "live-stacking", "astrophotography", "svbony"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "astropy>=6.0",
     "opencv-python>=4.9",
     "astroalign>=2.5",
-    # PySide6 completo, e não o Essentials, apesar dos ~800 MB a mais.
-    # Tentado e revertido: o Essentials não traz QtMultimedia (usado pelos
-    # bipes de foco) e o pyqtgraph quebra porque espera PySide6.__version__,
-    # que só o pacote guarda-chuva define. Contornar os dois seria dois
-    # remendos frágeis num programa que roda no campo.
+    # sep comes in transitively through astroalign, but core/stars.py imports it
+    # directly, so it is declared.
+    "sep>=1.2",
+    # The full PySide6, not Essentials, despite the ~800 MB. Tried and reverted:
+    # Essentials has no QtMultimedia (used by the focus beeps) and pyqtgraph
+    # breaks because it expects PySide6.__version__, which only the umbrella
+    # package defines. Working around both would be two fragile patches in a
+    # program that runs in the field.
     "PySide6>=6.6",
     "pyqtgraph>=0.13",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/mathmed/astrodoro"
+Issues = "https://github.com/mathmed/astrodoro/issues"
+
+[project.scripts]
+astrodoro = "astrodoro.cli:main"
+
+[project.gui-scripts]
+astrodoro-gui = "astrodoro.ui:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/astrodoro/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+# Everything under the package directory ships, the handset page, the icon and
+# the translation catalogues included. No force-include: those files already
+# live inside `src/astrodoro`, and listing them again makes hatchling fail with
+# "a second file is being added at the same path".
+#
+# Their PNG and .po extensions survive because .gitignore negates them
+# explicitly — hatchling honours the ignore file, so a broad `*.png` rule would
+# silently drop the icon from the wheel.
+packages = ["src/astrodoro"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # bin3/bin4 raise a deliberate RuntimeWarning; a test may exercise it.
+    "ignore:bin.:RuntimeWarning",
+]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests", "scripts"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # import order
+    "B",         # bugbear
+    "UP",        # pyupgrade
+    "C4",        # comprehensions
+    "RUF",
+]
+ignore = [
+    # `bin` shadows a builtin, but it is the camera's own parameter name and
+    # renaming it would diverge from the SDK and from every FITS header.
+    "A002",
+    # Bare-ish excepts around hardware and Qt teardown are deliberate and
+    # commented at each site.
+    "BLE001",
+    # Ambiguous unicode in strings: the interface uses ° ' " and arrows on
+    # purpose.
+    "RUF001", "RUF002", "RUF003",
+    # `int(round(x))` looks redundant but is not: round() on a numpy scalar
+    # returns a numpy scalar, and only the int() makes it usable as an index.
+    "RUF046",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The embedded star and constellation tables are data, not code to be reflowed.
+"src/astrodoro/pointing/brightstars.py" = ["E501"]
+"src/astrodoro/pointing/constellations.py" = ["E501"]
+# Tests use assert and long explanatory messages.
+"tests/*" = ["E501"]
