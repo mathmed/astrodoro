@@ -32,8 +32,8 @@ from ..settings import Settings
 @dataclass
 class Config:
     # The mode decides what to do with the frames, not just what to display:
-    #   frame/focus  -> capture + star detection (for HFR). No stacking, no
-    #                   recording, no rotation sampling.
+    #   frame/targets -> capture + star detection (for HFR and the loupe). No
+    #                   stacking, no recording, no rotation sampling.
     #   stack/config -> ALLOW integrating, but do not start it. The user does,
     #                   explicitly. config is included so that opening the
     #                   settings panel mid-session does not stop the stack.

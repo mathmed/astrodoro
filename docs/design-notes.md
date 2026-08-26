@@ -160,6 +160,34 @@ alignment matrix.
 degrees from the alignment star and about 50' at 30 degrees (the camera's field
 is 55'). Hence the guidance to align close to the target.
 
+### The compass offsets `alpha`, it never replaces it
+
+`pointing/model.py`
+
+The compass and the orientation event's `alpha` share no origin. On iOS
+`webkitCompassHeading` reads from north while `event.alpha` counts from wherever
+the page happened to load; the difference between them is arbitrary and can be
+any angle at all.
+
+`Pointing.feed` used to *substitute* the compass for `alpha` while unaligned and
+then stop, which reads sensibly and is wrong in the worst possible way: the
+alignment was solved against the compass reading, and every sample after it
+arrived as the gyroscope's `alpha`. The sky jumped by the whole difference
+between the two the instant the alignment reported success — **80 degrees in the
+reproduction, with a 130-degree gyro origin**. Nothing announced it. The screen
+said "aligned on Rigil Kentaurus" and the tube was in another part of the sky.
+
+What it does now is keep one constant, `compass - alpha`, refreshed only while
+unaligned. Before the first alignment the effective angle is still exactly the
+compass reading, so the map is positioned as before; aligning stops the refresh
+and freezes the constant, so the paragraph above becomes true instead of
+intended. Two tests in `test_pushto.py` hold both halves: a handset with a
+compass must point no worse than one without, and the map must still come up
+oriented before aligning.
+
+Every earlier test in this file passed `None` for the compass, which is why the
+sensor was green in the test suite and useless in the field.
+
 ### Why `atan2` and not `asin` for the azimuth delta
 
 With `asin` — as in the original — the alignment only works while the azimuth
@@ -263,3 +291,145 @@ by accident just while looking for another control — and in the dark you do no
 notice. The event is swallowed at the field and resent to the nearest scroll
 area's viewport, so the panel keeps scrolling; without that resend the field
 would be a dead hole in the middle of the scroll.
+
+---
+
+## The target ranking is a product of six factors, not a formula anyone tuned
+
+`core/tonight.py`
+
+The score is `altitude x window x moon x size x surface brightness x fame`, each
+in 0..1 and each kept on the `Suggestion` so the panel can show it. That shape
+was chosen so no single factor can rescue an object the others rule out — a
+magnificent galaxy 12 degrees above a wall is not a target tonight — and so the
+sentence explaining a score is always the same one.
+
+What each factor is measuring, and why it is not something simpler:
+
+- **altitude** is atmospheric extinction, `10^(-0.4·0.25·(X-1))`, not a linear
+  ramp: it is the same physics that makes the object fainter, so the number
+  means something. Above 80° it is multiplied by 0.7 — `pointing/pushto.py`
+  already warns that there the azimuth is unstable and the Dobsonian awkward.
+- **window** is minutes left above the requested altitude against the ~45 minutes
+  a useful run takes. It also absorbs "is it rising", which is why there is no
+  separate bonus for that.
+- **moon** multiplies phase, proximity and the Moon's own altitude, weighted per
+  family (`MOON_SENSITIVITY`). One number for all object types would be wrong in
+  both directions: under a gibbous Moon a globular is still worth imaging and a
+  face-on galaxy is not.
+- **size** is the object against the short side of the frame. Larger than the
+  frame keeps 0.4 rather than being dropped — a slice of the Veil is still worth
+  a night.
+- **surface brightness**, not integrated magnitude. M31 is magnitude 3.4 and
+  computes to 22.2 mag/arcsec², which is exactly why it disappoints in EAA.
+- **fame** is the uncomfortable one, and it earns its place empirically. With
+  the other five alone, a real evening's first fifteen suggestions were fifteen
+  anonymous open clusters — NGC 6743, NGC 6755, NGC 6664 — which score well
+  because they are small, bright and moon-proof, and none of which is why anyone
+  carries a telescope outside. A catalogue does not record what is worth
+  looking at; whether anyone ever gave the object a name is the closest fact it
+  has. Messier 1.0, named 0.92, catalogue number 0.7.
+
+### Why the positions come from an hour angle formula and not from astropy
+
+The list is recomputed on every filter change and every hour shift, over the
+~12 thousand objects OpenNGC leaves after the "interesting" filter. Sidereal
+time, the Sun and the Moon still come from astropy — that is three transforms.
+The objects go through `sin(alt) = sin δ sin φ + cos δ cos φ cos H`, vectorised:
+**3 ms for the whole catalogue** against the 9 ms astropy spends on the three
+bodies it still computes, and the same formula also gives the transit and the
+remaining window, which a per-instant transform does not. A full list refresh —
+sky, ranking and table — measures 12 ms.
+
+The cost is precession from J2000: measured against `pointing.sky_vectors` at
+this epoch, **0.3° in altitude** (`test_tonight.py` asserts under 0.5°). The
+altitude factor moves about 1% per degree, so a third of a degree cannot reorder
+the list. Do not "fix" this by transforming every object — it buys nothing and
+costs the hour slider.
+
+---
+
+## Focusing stopped being a mode
+
+`ui/loupe.py`
+
+FOCUS was one of four modes: a huge HFR, the trend plot, the beep and the 5x
+loupe. In use the mode was opened for the loupe and left immediately, because
+focus is not a phase of the night — it is something you redo whenever the
+temperature drifts, in the middle of framing or of an integration, and leaving
+the screen you were on to do it is the wrong trade.
+
+So the loupe became a panel that floats over the image in any mode (`Z`), the
+HFR it used to show large is the one the vitals bar already carried all night,
+and the beep follows its own checkbox instead of the active mode. The trend plot
+did not survive: the verdict sentence it existed to support ("improving",
+"getting worse", the px/min figure) is in the loupe, and the plot itself was
+being read by nobody with a hand on the focuser.
+
+The freed slot went to TARGETS, which is what the night actually starts with.
+
+---
+
+## Which star to align on is a computable question
+
+`pointing/brightstars.py`
+
+The sensor needs exactly one star, and choosing it was left entirely to the
+user: 179 names down to magnitude 3, in the dark, with cold hands. Two failure
+modes come out of that, and only one of them is obvious.
+
+The obvious one is not finding a star you are sure of. The quiet one is aligning
+on the **wrong star of a close pair** — the program then reports a confident
+position that is a few degrees off, the arrow points somewhere plausible, and
+nothing on screen says anything is wrong.
+
+So `for_alignment` scores every visible candidate on four factors:
+
+| factor | why it is there |
+| --- | --- |
+| distance to the target | dominant. One star corrects two axes, so the correction is local: `test_pushto` walks 25° from the alignment star with a 2.6° crooked mount and lands tens of arcminutes off. A magnificent star on the other side of the sky is a *worse* alignment than a second-magnitude one beside the target. |
+| isolation | degrees to the nearest star within 1.5 mag of it. Beyond 6° no confusion is possible; below that the score falls, because this is the failure that produces a wrong answer rather than no answer. |
+| altitude | flat between 30° and 65°, falling at both ends: the zenith is where the Dobsonian is awkward and the azimuth unstable (the same 80° `pushto.guide` warns about), and the floor is refraction plus the neighbour's wall — the user's own minimum altitude, never below 20°. |
+| brightness | a tie-breaker. The magnitude limit already did the filtering, so the factor is flat from first magnitude up: Vega and Antares are both simply obvious. |
+
+Measured: 6.7 ms for the whole ranking, one astropy transform for the 179 stars
+plus a 179x179 separation matrix in numpy. It is recomputed every 30 s and
+immediately whenever the target changes — never in the constructor, which used
+to cost the window 570 ms of start-up against 203 now, for a label nobody was
+looking at yet.
+
+---
+
+## The thumbnail is cached first and fetched second
+
+`core/previews.py`
+
+The pictures in TARGETS are DSS cutouts from the CDS. Everything about the
+module is shaped by one fact: **there is no internet where the telescope is.**
+So the disk cache is not an optimisation of the feature, it *is* the feature —
+`fetch` looks at the cache before it looks at the network, the interface has a
+button that caches a whole list while there is still wifi, and being offline is
+a normal state that produces "no picture", never an error.
+
+Three details that are not obvious:
+
+- **the cutout is framed on the object, not on the sensor.** The first version
+  sized it to the field, which is what you would do if the picture existed to
+  show framing. It made every small target useless: M57 is 1.3' inside a 51'
+  field, so the picture was a black square with a dot. Now the cutout is a
+  little over twice the object, and the sensor's rectangle is drawn *on top*.
+- **the rectangle is dropped when it does not fit.** For a small object the
+  frame is wider than the whole cutout, and a rectangle clamped to the edges is
+  not a rectangle, it is four lines outside the picture. When the field is wider
+  than the cutout the answer — "it fits with room to spare" — is already in the
+  reasons line.
+- **the cache key is name *and* field.** The same object at two zoom levels is
+  two pictures, and changing binning or focal length has to invalidate the old
+  framing rather than quietly show a rectangle that no longer means anything.
+
+Measured: ~1.8 s to fetch, 0.1 ms from cache, ~30-60 KB per object. Two
+concurrent workers, not more: the CDS runs that service for everyone.
+
+The rectangle is the whole reason the picture is there. "M8 is 45 arcminutes"
+and "the frame is 51x29" are two numbers nobody composes in their head at
+midnight; the same fact drawn on the real sky is instant.

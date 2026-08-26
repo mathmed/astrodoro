@@ -38,6 +38,16 @@ from astrodoro.settings import Settings
 #: ends up like this, and it is the defect the alignment has to absorb.
 MOUNT = o.normalize(np.array([0.045, 1.0, 0.018]))
 
+#: The orientation event's `alpha` counts from wherever the page loaded, not
+#: from north. A real handset therefore always arrives with an offset like this
+#: one, and the compass it also reports has a different origin entirely — the
+#: pair is what caught the substitution bug described in docs/design-notes.md.
+#: Set COMPASS to None to imitate a phone with no magnetometer.
+GYRO_OFFSET = 130.0
+#: Magnetometer error next to a metal tube with a mirror and a focuser.
+COMPASS_ERROR = 8.0
+COMPASS: float | None = COMPASS_ERROR
+
 
 def sensor(alt: float, az: float) -> tuple[float, float, float]:
     """The alpha/beta a device on a crooked mount would report for (alt, az)."""
@@ -77,8 +87,10 @@ def main() -> None:
 
     def send():
         a, b, g = sensor(*where)
-        sock.sendTextMessage(
-            json.dumps({"type": "o", "a": a, "b": b, "g": g, "c": None}))
+        compass = None if COMPASS is None else (a + COMPASS) % 360.0
+        sock.sendTextMessage(json.dumps(
+            {"type": "o", "a": (a - GYRO_OFFSET) % 360.0, "b": b, "g": g,
+             "c": compass}))
 
     timer = QTimer()
     timer.timeout.connect(send)

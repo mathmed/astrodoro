@@ -1,9 +1,16 @@
 """Main window — an EAA panel organised by task mode.
 
 The interface is not a settings screen: it is a sequence of phases with
-different screen needs. Framing wants the live frame large and the target
-direction; focusing wants a huge HFR and the loupe; integrating wants the stack
-and the frame health. Each mode rearranges the screen for the phase you are in.
+different screen needs. Choosing a target wants the ranked list and the sky's
+constraints; framing wants the live frame large and the target direction;
+integrating wants the stack and the frame health. Each mode rearranges the
+screen for the phase you are in.
+
+Focusing used to be a mode of its own and is not any more: the only part of it
+anyone opened was the loupe, and focus is not a phase — it is something you
+redo whenever the temperature drifts, in the middle of whatever you were doing.
+It now floats over the image in any mode (`ui/loupe.py`), and the HFR it used to
+show large is the one the vitals bar carries all night anyway.
 
 Above all of that sits a vitals bar that never leaves the screen, because in the
 dark you glance, you do not read panels.
@@ -12,11 +19,22 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QDateTime,
+    QEvent,
+    QObject,
+    QSize,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import (
     QGuiApplication,
     QImage,
@@ -31,8 +49,10 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QCompleter,
+    QDateTimeEdit,
     QDoubleSpinBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -50,8 +70,9 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core import background, stretch
+from ..core import background, previews, stretch, tonight
 from ..core.catalog import Catalog
+from ..core.tonight import compass_point
 from ..drivers.svbony import list_cameras
 from ..i18n import N_, set_language
 from ..i18n import available as available_languages
@@ -83,7 +104,10 @@ from .design import (
     stylesheet,
 )
 from .history import FrameHistory
+from .loupe import Loupe
+from .previews import PreviewLoader, PreviewView
 from .skymap import Mark, SkyMap
+from .targets import TargetTable
 from .worker import CaptureWorker, Config
 
 pg.setConfigOptions(imageAxisOrder="row-major", antialias=False)
@@ -96,8 +120,9 @@ MODES = [
     ("frame", N_("1  FRAME"),
      N_("find and centre the target — live frame, phone sensor and push-to"),
      "frame"),
-    ("focus", N_("2  FOCUS"),
-     N_("large HFR, trend, 5x loupe and a beep per frame"), "focus"),
+    ("targets", N_("2  TARGETS"),
+     N_("what is worth imaging at this hour, ranked — altitude, Moon, size"),
+     "list"),
     ("stack", N_("3  INTEGRATE"),
      N_("stack, record and follow the platform"), "stack"),
     ("config", N_("4  CONFIG"),
@@ -182,6 +207,7 @@ class MainWindow(QMainWindow):
         self._replay_folder = ""
         self._target = None
         self._catalog: Catalog | None = None
+        self._cat_missing = False
         # The phone sensor answers "where does the tube point" in this mode.
         self.point = Pointing(self.settings.latitude, self.settings.longitude,
                               self.settings.elevation_m)
@@ -191,6 +217,24 @@ class MainWindow(QMainWindow):
         self.hs.clients.connect(self._on_handset_clients)
         self._found = None
         self._target_name = ""
+        # TARGETS: the sky the current list was computed for, when it was
+        # computed, and a guard so setting the hour field does not read as the
+        # user editing it.
+        self._sky = None
+        self._targets_t = 0.0
+        self._when_guard = False
+        #: Star the loupe is pinned to, or None to follow the brightest.
+        self._loupe_xy: tuple[float, float] | None = None
+        #: Which object the preview panel is currently waiting for.
+        self._preview_want = ""
+        # DSS thumbnails: fetched off the Qt thread, cached on disk.
+        self.preview_loader = PreviewLoader(self)
+        self.preview_loader.ready.connect(self._preview_ready)
+        self.preview_loader.failed.connect(self._preview_failed)
+        # Alignment suggestions, and which of them is on screen.
+        self._align_picks: list = []
+        self._align_i = 0
+        self._align_t = 0.0
         self._completer: QCompleter | None = None
         self._marks: list = []
         self._marks_t = 0.0
@@ -392,7 +436,7 @@ class MainWindow(QMainWindow):
         self.panels = QStackedWidget()
         self._panel_index = {}
         for key, build in (("frame", self._panel_frame),
-                           ("focus", self._panel_focus),
+                           ("targets", self._panel_targets),
                            ("stack", self._panel_stack),
                            ("config", self._panel_config)):
             sa = QScrollArea()
@@ -486,8 +530,9 @@ class MainWindow(QMainWindow):
 
     # --------------------------------------------------------- panel: FRAME
     def _panel_frame(self) -> QWidget:
-        """The FRAME panel, in the order the night happens: switch the sensor on,
-        align, choose the target. Camera and checks come after.
+        """The FRAME panel, in the order the night happens: switch the sensor
+        on, align, then the camera. Choosing *what* to point at happens one mode
+        earlier, in TARGETS, which is also where the search box lives.
 
         The order matters more than it seems: the column scrolls, and whatever
         falls below the fold does not exist for someone in the dark with a hand
@@ -521,6 +566,40 @@ class MainWindow(QMainWindow):
         self.lbl_altaz = QLabel("—")
         self.lbl_altaz.setFont(T_L())
         c.add(self.lbl_altaz)
+        # Which star to align on is a question with a computable answer, and
+        # hunting one in a list of 179 names in the dark is what makes people
+        # give up. The criteria are in `brightstars.for_alignment`.
+        c.add(_tag(_("star to align on")))
+        self.lbl_align_pick = QLabel("—")
+        self.lbl_align_pick.setFont(T_MONO())
+        self.lbl_align_pick.setWordWrap(True)
+        self.lbl_align_pick.setToolTip(_(
+            "The star worth aligning on right now: bright, unmistakable "
+            "(no similar star beside it), comfortable to reach, and as close to "
+            "the target as possible — one star corrects two axes and is most "
+            "accurate around itself."))
+        c.add(self.lbl_align_pick)
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        self.btn_align_pick = QPushButton(_("aim at it and align"))
+        self._ic(self.btn_align_pick, "star")
+        self.btn_align_pick.setToolTip(_("point the tube at this star first — "
+                                         "the alignment reads the sensor now"))
+        self.btn_align_pick.clicked.connect(self._align_on_pick)
+        self.btn_align_next = QPushButton("↻")
+        self.btn_align_next.setMaximumWidth(38)
+        self.btn_align_next.setToolTip(_("another star — this one may be behind "
+                                         "a tree"))
+        self.btn_align_next.clicked.connect(self._align_next_pick)
+        self.btn_align_map = QPushButton("☆")
+        self.btn_align_map.setMaximumWidth(38)
+        self.btn_align_map.setToolTip(_("show it on the sky map"))
+        self.btn_align_map.clicked.connect(self._align_pick_on_map)
+        row.addWidget(self.btn_align_pick, 1)
+        row.addWidget(self.btn_align_next)
+        row.addWidget(self.btn_align_map)
+        c.add_layout(row)
+
         b = QPushButton(_("open the map and align   (M)"))
         self._ic(b, "target")
         b.clicked.connect(lambda: self._set_view("map"))
@@ -532,31 +611,7 @@ class MainWindow(QMainWindow):
         c.add(self.btn_reset_align)
         v.addWidget(c)
 
-        c = Card(_("2 · target"))
-        row = QHBoxLayout()
-        self.ed_goto = QLineEdit()
-        self.ed_goto.setPlaceholderText("M8, NGC 5128, Antares…")
-        self.ed_goto.returnPressed.connect(self.set_goto)
-        b = QPushButton(_("go"))
-        b.setMaximumWidth(62)
-        self._ic(b, "arrow")
-        b.clicked.connect(self.set_goto)
-        self.btn_clear_target = QPushButton("✕")
-        self.btn_clear_target.setMaximumWidth(38)
-        self.btn_clear_target.setToolTip(_("forget the target"))
-        self.btn_clear_target.clicked.connect(self.clear_target)
-        self.btn_clear_target.setEnabled(False)
-        row.addWidget(self.ed_goto, 1)
-        row.addWidget(b)
-        row.addWidget(self.btn_clear_target)
-        c.add_layout(row)
-        self.lbl_goto = QLabel(_("no target"))
-        self.lbl_goto.setWordWrap(True)
-        self.lbl_goto.setFont(T_MONO())
-        c.add(self.lbl_goto)
-        v.addWidget(c)
-
-        c = Card(_("camera"))
+        c = Card(_("2 · camera"))
         row = QHBoxLayout()
         self.cb_source = QComboBox()
         self.cb_source.addItems([_("camera"), _("replay")])
@@ -610,39 +665,128 @@ class MainWindow(QMainWindow):
         v.addStretch(1)
         return w
 
-    # --------------------------------------------------------- panel: FOCUS
-    def _panel_focus(self) -> QWidget:
+    # ------------------------------------------------------- panel: TARGETS
+    def _panel_targets(self) -> QWidget:
+        """Filters on the left, the ranked list in the place of the image.
+
+        The hour is a field and not just "now" because the decision is almost
+        always made before the sky is ready: you are setting up at dusk and what
+        you want to know is what will be well placed at eleven, not what is well
+        placed while you are still carrying the tube outside.
+        """
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(8)
-        c = Card()
-        self.lbl_hfr = QLabel("—")
-        self.lbl_hfr.setFont(T_DISPLAY())
-        self.lbl_hfr.setAlignment(Qt.AlignCenter)
-        c.add(self.lbl_hfr)
-        self.lbl_hfr_sub = QLabel(_("median HFR"))
-        self.lbl_hfr_sub.setFont(T_SMALL())
-        self.lbl_hfr_sub.setAlignment(Qt.AlignCenter)
-        c.add(self.lbl_hfr_sub)
-        self.lbl_verdict = QLabel("—")
-        self.lbl_verdict.setFont(T_H2())
-        self.lbl_verdict.setAlignment(Qt.AlignCenter)
-        self.lbl_verdict.setWordWrap(True)
-        c.add(self.lbl_verdict)
+
+        c = Card(_("1 · when"))
+        row = QHBoxLayout()
+        self.dt_when = QDateTimeEdit(QDateTime.currentDateTime())
+        self.dt_when.setDisplayFormat("dd/MM  HH:mm")
+        self.dt_when.setCalendarPopup(True)
+        self.dt_when.dateTimeChanged.connect(self._when_edited)
+        self.btn_now = QPushButton(_("now"))
+        self.btn_now.setCheckable(True)
+        self.btn_now.setChecked(True)
+        self.btn_now.setMaximumWidth(70)
+        self.btn_now.setToolTip(_("follow the clock — untick to plan another "
+                                  "hour"))
+        self.btn_now.toggled.connect(self._now_toggled)
+        row.addWidget(self.dt_when, 1)
+        row.addWidget(self.btn_now)
+        c.add_layout(row)
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        for label, hours in ((_("−1h"), -1.0), (_("+1h"), 1.0),
+                             (_("+2h"), 2.0), (_("+4h"), 4.0)):
+            b = QPushButton(label)
+            b.clicked.connect(lambda _checked=False, h=hours: self._shift_when(h))
+            row.addWidget(b)
+        c.add_layout(row)
+        self.lbl_sky = QLabel("—")
+        self.lbl_sky.setFont(T_MONO())
+        self.lbl_sky.setWordWrap(True)
+        self.lbl_sky.setToolTip(_("the two things that limit every target "
+                                  "tonight: how dark it is and where the Moon "
+                                  "is"))
+        c.add(self.lbl_sky)
         v.addWidget(c)
 
-        c = Card(_("feedback"))
-        self.chk_beep = QCheckBox(_("beep per frame"))
-        self.chk_beep.toggled.connect(
-            lambda on: setattr(self.beeper, "enabled", on))
-        c.add(self.chk_beep)
-        c.add(_hint(_("the pitch rises as the HFR falls. With a hand on the "
-                      "focuser you are not looking at the screen.")))
-        b = QPushButton(_("clear the best focus"))
-        self._ic(b, "refresh")
-        b.clicked.connect(lambda: self._flag("reset_focus_best"))
-        c.add(b)
+        c = Card(_("2 · filters"))
+        self.cb_family = QComboBox()
+        for key, (label, _types) in tonight.FAMILIES.items():
+            self.cb_family.addItem(_(label), key)
+        i = self.cb_family.findData(self.settings.target_family)
+        self.cb_family.setCurrentIndex(max(i, 0))
+        self.cb_family.currentIndexChanged.connect(self._refresh_targets)
+        c.field(_("type"), self.cb_family)
+
+        self.sp_min_alt = QDoubleSpinBox()
+        self.sp_min_alt.setRange(0.0, 85.0)
+        self.sp_min_alt.setDecimals(0)
+        self.sp_min_alt.setSuffix("°")
+        self.sp_min_alt.setValue(self.settings.target_min_alt)
+        self.sp_min_alt.valueChanged.connect(self._refresh_targets)
+        c.field(_("minimum altitude"), self.sp_min_alt,
+                _("what your horizon actually clears — trees, the neighbour's "
+                  "wall, the worst of the light dome"))
+
+        self.sp_max_mag = QDoubleSpinBox()
+        self.sp_max_mag.setRange(3.0, 16.0)
+        self.sp_max_mag.setDecimals(1)
+        self.sp_max_mag.setSingleStep(0.5)
+        self.sp_max_mag.setValue(self.settings.target_max_mag)
+        self.sp_max_mag.valueChanged.connect(self._refresh_targets)
+        c.field(_("faintest magnitude"), self.sp_max_mag)
+
+        self.chk_fits = QCheckBox(_("only what fits in the frame"))
+        self.chk_fits.setChecked(self.settings.target_fits_only)
+        self.chk_fits.toggled.connect(self._refresh_targets)
+        c.add(self.chk_fits)
+
+        self.chk_previews = QCheckBox(_("show a photo of the object"))
+        self.chk_previews.setChecked(self.settings.previews_enabled)
+        self.chk_previews.setToolTip(_(
+            "DSS survey images, downloaded once and kept on disk. Untick to "
+            "stop the program touching the network at all."))
+        self.chk_previews.toggled.connect(self._previews_toggled)
+        c.add(self.chk_previews)
+        self.btn_prefetch = QPushButton(_("cache the photos of this list"))
+        self._ic(self.btn_prefetch, "save")
+        self.btn_prefetch.setToolTip(_(
+            "Fetch every suggestion's picture now, while there is internet — "
+            "in the field there is none, and only the cache answers."))
+        self.btn_prefetch.clicked.connect(self._prefetch_previews)
+        c.add(self.btn_prefetch)
+        self.lbl_fov = QLabel("")
+        self.lbl_fov.setFont(T_SMALL())
+        self.lbl_fov.setObjectName("statLabel")
+        c.add(self.lbl_fov)
+        v.addWidget(c)
+
+        c = Card(_("3 · target"))
+        row = QHBoxLayout()
+        self.ed_goto = QLineEdit()
+        self.ed_goto.setPlaceholderText("M8, NGC 5128, Antares…")
+        self.ed_goto.returnPressed.connect(self.set_goto)
+        b = QPushButton(_("go"))
+        b.setMaximumWidth(62)
+        self._ic(b, "arrow")
+        b.clicked.connect(self.set_goto)
+        self.btn_clear_target = QPushButton("✕")
+        self.btn_clear_target.setMaximumWidth(38)
+        self.btn_clear_target.setToolTip(_("forget the target"))
+        self.btn_clear_target.clicked.connect(self.clear_target)
+        self.btn_clear_target.setEnabled(False)
+        row.addWidget(self.ed_goto, 1)
+        row.addWidget(b)
+        row.addWidget(self.btn_clear_target)
+        c.add_layout(row)
+        self.lbl_goto = QLabel(_("no target"))
+        self.lbl_goto.setWordWrap(True)
+        self.lbl_goto.setFont(T_MONO())
+        c.add(self.lbl_goto)
+        c.add(_hint(_("a name you already know; the list is for the rest.")))
         v.addWidget(c)
 
         v.addStretch(1)
@@ -1085,6 +1229,17 @@ class MainWindow(QMainWindow):
                 b.setMaximumWidth(34)
             b.clicked.connect(fn)
             hb.addWidget(b)
+        # The loupe is a button on the image bar and not a mode: focus is not a
+        # phase of the night, it is something you redo whenever the temperature
+        # drifts, in the middle of whatever you were doing.
+        self.btn_loupe = QPushButton(_("loupe"))
+        self.btn_loupe.setCheckable(True)
+        self.btn_loupe.setToolTip(_("5x view of a star over the image, to focus "
+                                    "without leaving what you are doing (Z)"))
+        self._ic(self.btn_loupe, "focus", 15)
+        self.btn_loupe.toggled.connect(self.toggle_loupe)
+        hb.addWidget(self.btn_loupe)
+
         self.lbl_view = QLabel("—")
         self.lbl_view.setFont(T_MONO())
         hb.addSpacing(10)
@@ -1108,16 +1263,36 @@ class MainWindow(QMainWindow):
         self.skymap.az_dragged.connect(self._drag_sky)
         self.skymap.searched.connect(self.search)
 
+        # The ranked list takes the whole image area, like the map: choosing a
+        # target is reading a list, and a list read in a 210 px strip is a list
+        # nobody reads.
+        self.targets = TargetTable()
+        self.targets.chosen.connect(self._suggestion_chosen)
+        self.targets.activated_target.connect(self._use_suggestion)
+
         self.canvas = QStackedWidget()
         self.canvas.addWidget(self.view)
         self.canvas.addWidget(self.skymap)
+        self.canvas.addWidget(self.targets)
         v.addWidget(self.canvas, 1)
+
+        # The loupe floats over the image, so it is a child of the image widget
+        # and not a row in any layout.
+        self.loupe = Loupe(self.view)
+        self.loupe.setVisible(False)
+        self.loupe.closed.connect(lambda: self.btn_loupe.setChecked(False))
+        self.loupe.beep_toggled.connect(
+            lambda on: setattr(self.beeper, "enabled", on))
+        self.loupe.reset_best.connect(lambda: self._flag("reset_focus_best"))
+        self.loupe.auto_star.connect(lambda: self._pin_loupe(None))
+        self.view.installEventFilter(self)
+        self.vb.scene().sigMouseClicked.connect(self._image_clicked)
 
         self.context = QStackedWidget()
         self.context.setMaximumHeight(210)
         self._ctx_index = {
             "frame": self.context.addWidget(self._ctx_frame()),
-            "focus": self.context.addWidget(self._ctx_focus()),
+            "targets": self.context.addWidget(self._ctx_targets()),
             "stack": self.context.addWidget(self._ctx_stack()),
             "config": self.context.addWidget(self._ctx_config()),
         }
@@ -1133,7 +1308,7 @@ class MainWindow(QMainWindow):
         self.lbl_goto_arrow.setFont(T_DISPLAY())
         self.lbl_goto_arrow.setAlignment(Qt.AlignCenter)
         c.add(self.lbl_goto_arrow)
-        self.lbl_goto_dir = QLabel(_("choose a target in the panel"))
+        self.lbl_goto_dir = QLabel(_("choose a target in TARGETS (2)"))
         self.lbl_goto_dir.setFont(T_BODY())
         self.lbl_goto_dir.setWordWrap(True)
         c.add(self.lbl_goto_dir)
@@ -1143,27 +1318,80 @@ class MainWindow(QMainWindow):
         c.add(self.lbl_objects, 1)
         return c
 
-    def _ctx_focus(self) -> QWidget:
+    def _ctx_targets(self) -> QWidget:
+        """The selected suggestion, factor by factor.
+
+        The score alone would be an oracle. Every factor that produced it is on
+        screen for the same reason a rejected frame shows its measurements: a
+        verdict nobody can audit is a verdict nobody trusts — and here it is also
+        how you learn that the object is fine and it is the Moon that is wrong.
+        """
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(8)
-        c = Card(_("5x loupe"))
-        self.loupe_view = pg.GraphicsLayoutWidget()
-        vb = self.loupe_view.addViewBox(lockAspect=True, invertY=True)
-        vb.setMouseEnabled(False, False)
-        self.loupe_img = pg.ImageItem()
-        vb.addItem(self.loupe_img)
-        c.add(self.loupe_view, 1)
-        c.setMaximumWidth(230)
+
+        c = Card(_("what it looks like"))
+        self.preview = PreviewView()
+        self.preview.setToolTip(_(
+            "DSS survey image of the object, with your frame drawn on it — "
+            "the fastest way to see whether the target fits. Downloaded once "
+            "and kept on disk, so it is there with no internet in the field."))
+        c.add(self.preview, 1)
+        c.setMaximumWidth(190)
         h.addWidget(c)
-        c2 = Card(_("HFR over time"))
-        self.plot_focus = pg.PlotWidget()
-        self.curve_focus = self.plot_focus.plot()
-        self.line_best = pg.InfiniteLine(angle=0)
-        self.plot_focus.addItem(self.line_best)
-        c2.add(self.plot_focus, 1)
-        h.addWidget(c2, 1)
+
+        c = Card(_("suggestion"))
+        self.lbl_sug = QLabel(_("pick an object from the list"))
+        self.lbl_sug.setFont(T_L())
+        self.lbl_sug.setWordWrap(True)
+        c.add(self.lbl_sug)
+        self.lbl_sug_why = QLabel("")
+        self.lbl_sug_why.setFont(T_MONO())
+        self.lbl_sug_why.setWordWrap(True)
+        c.add(self.lbl_sug_why, 1)
+        row = QHBoxLayout()
+        self.btn_use = QPushButton(_("make it the target"))
+        self._ic(self.btn_use, "target")
+        self.btn_use.setEnabled(False)
+        self.btn_use.setToolTip(_("sets the target and opens FRAME, where the "
+                                  "arrow says which way to push"))
+        self.btn_use.clicked.connect(
+            lambda: self._use_suggestion(self.targets.current()))
+        self.btn_see = QPushButton(_("see on the map"))
+        self._ic(self.btn_see, "star")
+        self.btn_see.setEnabled(False)
+        self.btn_see.clicked.connect(self._show_suggestion_on_map)
+        row.addWidget(self.btn_use, 1)
+        row.addWidget(self.btn_see)
+        c.add_layout(row)
+        h.addWidget(c, 1)
+
+        c2 = Card(_("why it scored that"))
+        # Two columns: the sixth factor did not fit in one, and the context
+        # strip is capped at 210 px on purpose — it may not steal height from
+        # the image.
+        grid = QWidget()
+        g = QGridLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(1)
+        self.st_f_alt = Stat(_("altitude"), "—", min_width=132)
+        self.st_f_window = Stat(_("time left"), "—", min_width=132)
+        self.st_f_moon = Stat(_("Moon"), "—", min_width=132)
+        self.st_f_size = Stat(_("size in frame"), "—", min_width=132)
+        self.st_f_bright = Stat(_("surface brightness"), "—", min_width=132)
+        # The sixth factor is on screen for the same reason as the other five:
+        # it is the one that surprises, because it is about the catalogue rather
+        # than about the sky.
+        self.st_f_fame = Stat(_("named object"), "—", min_width=132)
+        for i, st in enumerate((self.st_f_alt, self.st_f_window, self.st_f_moon,
+                                self.st_f_size, self.st_f_bright,
+                                self.st_f_fame)):
+            g.addWidget(st, i % 3, i // 3)
+        c2.add(grid)
+        c2.setMaximumWidth(420)
+        h.addWidget(c2)
         return w
 
     def _ctx_stack(self) -> QWidget:
@@ -1270,6 +1498,7 @@ class MainWindow(QMainWindow):
         for key, fn in (("+", self.zoom_in), ("=", self.zoom_in),
                         ("-", self.zoom_out), ("0", self.fit_view),
                         ("V", self.toggle_view),
+                        ("Z", lambda: self.btn_loupe.toggle()),
                         ("M", lambda: self._set_view(
                             "live" if self._view == "map" else "map")),
                         ("F", lambda: self.btn_full.toggle()),
@@ -1343,11 +1572,16 @@ class MainWindow(QMainWindow):
     def set_mode(self, key: str) -> None:
         self._mode = key
         self._req(mode=key)
+        self.rail.mark(key)          # a mode may be entered from a button too
         self.panels.setCurrentIndex(self._panel_index[key])
         self.context.setCurrentIndex(self._ctx_index[key])
         # Each mode has a sensible default, but an explicit choice on the bar
         # holds until you change mode again.
-        self._set_view("live" if key in ("frame", "focus") else "stack")
+        self._set_view({"frame": "live", "targets": "targets"}.get(key, "stack"))
+        if key == "targets":
+            self._refresh_targets()
+        if key == "frame":
+            self._refresh_align_pick()
         self._render(True)
 
     # ================================================================ session
@@ -1615,6 +1849,8 @@ class MainWindow(QMainWindow):
         self.worker.cooling.connect(self.on_cooling)
         self.worker.dark_saved.connect(self.on_dark_saved)
         self.worker.flat_saved.connect(self.on_flat_saved)
+        # A star pinned before this session started stays pinned.
+        self.worker.set_loupe(self._loupe_xy)
         self.thread.start()
         self.btn_start.setEnabled(False)
         self.btn_pause.setEnabled(True)
@@ -1709,8 +1945,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().setStyleSheet(stylesheet(p, self._large_targets))
         for plot, curve, line in (
                 (self.hist, self.hist_curve, self.hist_black),
-                (self.hist2, self.hist2_curve, self.hist2_black),
-                (self.plot_focus, self.curve_focus, self.line_best)):
+                (self.hist2, self.hist2_curve, self.hist2_black)):
             plot.setBackground(p.plot_bg)
             for ax in ("left", "bottom"):
                 plot.getAxis(ax).setPen(p.text_dim)
@@ -1723,10 +1958,12 @@ class MainWindow(QMainWindow):
         # Black dashed, white dotted: in night mode colour separates nothing.
         for lw in (self.hist_white, self.hist2_white):
             lw.setPen(pg.mkPen(p.text_dim, style=Qt.DotLine))
-        for view in (self.view, self.loupe_view):
-            view.setBackground(p.plot_bg)
+        self.view.setBackground(p.plot_bg)
+        self.loupe.set_palette(p)
         self.health.set_palette(p)
         self.skymap.set_palette(p)
+        self.targets.set_palette(p)
+        self.preview.set_palette(p)
         self._pin_button_widths()
         self._style_completer()
         self._retint_icons()
@@ -1785,15 +2022,373 @@ class MainWindow(QMainWindow):
         self.sl_bg.setValue(int(round(bg * 100)))
         self.sl_clip.setValue(int(round(clip * 10)))
 
+    # ======================================================== alignment star
+    def _refresh_align_pick(self, force: bool = False) -> None:
+        """Recompute which star is worth aligning on.
+
+        Every 30 s while FRAME is open, and immediately when the target changes:
+        the answer depends on the target, and 7 ms of astropy is not something
+        to spend on the 120 ms tick.
+        """
+        if not hasattr(self, "lbl_align_pick"):
+            return
+        now = time.monotonic()
+        # `force` is "the target changed, answer again". Everything else waits
+        # for the throttle, and for the window to be on screen: the first
+        # astropy call of the process costs ~0.5 s (imports and tables), and
+        # paying it inside the constructor delayed the window by that much for
+        # a label nobody was looking at yet — 570 ms to open, against 203 now.
+        if not force and (not self.isVisible() or now - self._align_t < 30.0):
+            return
+        self._align_t = now
+        target = ((self._target.ra, self._target.dec)
+                  if self._target is not None else None)
+        # The floor is the user's own horizon — the same wall and trees the
+        # target list already knows about — never below what refraction allows.
+        floor = max(self.sp_min_alt.value(), brightstars.FLOOR_ALT)
+        try:
+            self._align_picks = brightstars.for_alignment(
+                self.sp_lat.value(), self.sp_lon.value(), target=target,
+                min_alt=floor, elevation_m=self.sp_elev.value())
+        except Exception as e:                # ephemeris or clock trouble
+            self.on_log(_("could not choose an alignment star: {error}").format(
+                error=e))
+            return
+        self._align_i = 0
+        self._show_align_pick()
+
+    def _show_align_pick(self) -> None:
+        pick = self._align_pick()
+        has = pick is not None
+        self.btn_align_pick.setEnabled(has)
+        self.btn_align_next.setEnabled(len(self._align_picks) > 1)
+        self.btn_align_map.setEnabled(has)
+        if not has:
+            self.lbl_align_pick.setText(
+                _("no alignment star above {alt:.0f}°").format(
+                    alt=max(self.sp_min_alt.value(), brightstars.FLOOR_ALT)))
+            return
+        # The magnitude is on the line, not only in the score: it is what tells
+        # you whether to expect the star in the finder or in the naked eye.
+        text = _("{star} · mag {mag:.1f}\n{alt:.0f}° up, {dir}").format(
+            star=pick.star.full, mag=pick.star.mag, alt=pick.alt,
+            dir=compass_point(pick.az))
+        if np.isfinite(pick.target_sep):
+            text += "\n" + _("{deg:.0f}° from the target").format(
+                deg=pick.target_sep)
+        self.lbl_align_pick.setText(text)
+
+    def _align_pick(self):
+        if not self._align_picks:
+            return None
+        return self._align_picks[self._align_i % len(self._align_picks)]
+
+    def _align_next_pick(self) -> None:
+        if self._align_picks:
+            self._align_i = (self._align_i + 1) % len(self._align_picks)
+            self._show_align_pick()
+
+    def _align_on_pick(self) -> None:
+        pick = self._align_pick()
+        if pick is not None:
+            self.align_on(pick.star)
+
+    def _align_pick_on_map(self) -> None:
+        pick = self._align_pick()
+        if pick is None:
+            return
+        self._found = pick.star
+        self._set_view("map")
+        self._update_map()
+
+    # ================================================================= targets
+    def _targets_when(self) -> datetime:
+        """The instant the list is computed for, as an *aware* datetime.
+
+        Aware on purpose: astropy reads a naive datetime as UTC, the field on
+        screen is local time, and three hours of silent error puts every object
+        in the wrong half of the sky.
+        """
+        if self.btn_now.isChecked():
+            return datetime.now().astimezone()
+        return self.dt_when.dateTime().toPython().astimezone()
+
+    def _now_toggled(self, on: bool) -> None:
+        self.dt_when.setEnabled(not on)
+        if on:
+            self._when_guard = True
+            self.dt_when.setDateTime(QDateTime.currentDateTime())
+            self._when_guard = False
+        self._refresh_targets()
+
+    def _when_edited(self, *_args) -> None:
+        if self._when_guard:
+            return
+        # Typing an hour is asking for that hour: staying on "now" would undo
+        # the edit on the next tick.
+        if self.btn_now.isChecked():
+            self.btn_now.setChecked(False)     # this refreshes on its own
+            return
+        self._refresh_targets()
+
+    def _shift_when(self, hours: float) -> None:
+        base = self.dt_when.dateTime() if not self.btn_now.isChecked() \
+            else QDateTime.currentDateTime()
+        self.btn_now.setChecked(False)
+        self._when_guard = True
+        self.dt_when.setDateTime(base.addSecs(int(hours * 3600)))
+        self._when_guard = False
+        self._refresh_targets()
+
+    def _fov_arcmin(self) -> tuple[float, float]:
+        """The frame in arcminutes, from the optics and the selected binning."""
+        w = self._q.shape[1] if self._q is not None else 1920
+        h = self._q.shape[0] if self._q is not None else 1080
+        e = self.pixel_scale() / 60.0
+        return e * w, e * h
+
+    def _refresh_targets(self, *_args) -> None:
+        """Recompute the whole list, from the sky down.
+
+        Cheap enough to run on every filter change and every minute of the
+        clock: 12 ms measured over the 12036 objects of OpenNGC — 9 ms of
+        astropy (sidereal time, Sun, Moon) and 3 ms for the ranking itself,
+        which is one vectorised pass.
+        """
+        if not hasattr(self, "targets"):
+            return                          # still building the window
+        cat = self._cat()
+        if cat is None:
+            self.lbl_sky.setText(_("no catalogue — run `astrodoro catalog`"))
+            self.targets.set_rows([])
+            return
+        when = self._targets_when()
+        try:
+            sky = tonight.sky_at(self.sp_lat.value(), self.sp_lon.value(),
+                                 when, elevation_m=self.sp_elev.value())
+        except Exception as e:                # ephemeris or clock trouble
+            self.on_log(_("could not read the sky: {error}").format(error=e))
+            return
+        self._sky = sky
+        self.lbl_sky.setText(sky.twilight_text() + "\n" + sky.moon_text())
+
+        fov = self._fov_arcmin()
+        self.lbl_fov.setText(_("frame {w:.0f}' x {h:.0f}'").format(w=fov[0],
+                                                                  h=fov[1]))
+        rows = tonight.rank(
+            cat.objs, sky, self.sp_lat.value(), fov_arcmin=fov,
+            min_alt=self.sp_min_alt.value(), max_mag=self.sp_max_mag.value(),
+            family=self.cb_family.currentData(),
+            fits_only=self.chk_fits.isChecked())
+        self.targets.set_rows(rows)
+        self._targets_t = time.monotonic()
+        if self._view == "targets":
+            self._update_view_label()
+        if not rows:
+            self.lbl_sug.setText(_("nothing passes these filters at this hour"))
+            self.lbl_sug_why.setText(
+                _("lower the minimum altitude, allow fainter objects, or try "
+                  "another hour."))
+
+    def _previews_toggled(self, on: bool) -> None:
+        self.btn_prefetch.setEnabled(on)
+        cur = self.targets.current()
+        if not on:
+            self.preview.clear(_("previews are off"))
+        elif cur is not None:
+            self._request_preview(cur.obj)
+
+    def _suggestion_chosen(self, s) -> None:
+        self.btn_use.setEnabled(s is not None)
+        self.btn_see.setEnabled(s is not None)
+        if s is None:
+            self.preview.clear(_("pick an object"))
+            return
+        o = s.obj
+        self.lbl_sug.setText(f"{o.label} · {o.kind_label}")
+        self.lbl_sug_why.setText(" · ".join(s.reasons()))
+        # The factor is the value and the measurement is the label, not the
+        # other way round: six factors on one line each only stay readable if
+        # every value is the same three characters wide, and it is the factors
+        # that are meant to be compared with one another.
+        f = s.factors
+        frac, sb = s.field_fraction, s.surface_brightness
+        left = (_("all night") if np.isinf(s.minutes_left)
+                else _("{min:.0f} min").format(min=s.minutes_left))
+        fame = (_("Messier") if o.messier
+                else (_("has a name") if o.common else _("catalogue number")))
+        for st, label, factor in (
+                (self.st_f_alt, _("altitude {alt:.0f}°").format(alt=s.alt),
+                 f["altitude"]),
+                (self.st_f_window, left, f["window"]),
+                (self.st_f_moon, _("Moon {deg:.0f}°").format(deg=s.moon_sep),
+                 f["moon"]),
+                (self.st_f_size, _("frame {pct:.0f}%").format(pct=frac * 100)
+                 if frac else _("size unknown"), f["size"]),
+                (self.st_f_bright,
+                 _("{sb:.1f} mag/arcsec²").format(sb=sb) if np.isfinite(sb)
+                 else _("brightness unknown"), f["brightness"]),
+                (self.st_f_fame, fame, f["fame"])):
+            st.set_label(label)
+            st.set(f"{factor:.2f}", self._factor_colour(factor))
+        self._request_preview(o)
+
+    # ------------------------------------------------------------- previews
+    def _preview_key(self, o) -> tuple[str, float]:
+        """Which cutout this object needs: its name and the field to ask for."""
+        return o.name, previews.cutout_fov(o.major_arcmin, self._fov_arcmin())
+
+    def _request_preview(self, o) -> None:
+        if not self.chk_previews.isChecked():
+            self.preview.clear(_("previews are off"))
+            return
+        name, fov = self._preview_key(o)
+        self._preview_want = name
+        hit = self.preview_loader.request(name, o.ra, o.dec, fov)
+        if hit is not None:
+            self._show_preview(o, str(hit))
+        else:
+            self.preview.clear(_("fetching…"))
+
+    def _show_preview(self, o, path: str) -> None:
+        _name, fov = self._preview_key(o)
+        frame = previews.frame_fraction(self._fov_arcmin(), fov)
+        # A rectangle bigger than the picture is not a rectangle, it is four
+        # lines outside the frame. When the field is wider than the cutout the
+        # answer is "it fits with room to spare", which the reasons already say.
+        if max(frame) > 0.98:
+            frame = None
+        # The label carries the attribution the survey asks for, and doubles as
+        # the scale of the picture.
+        self.preview.show_image(path, frame,
+                                _("DSS2 · {fov:.0f}'").format(fov=fov))
+
+    @Slot(str, str)
+    def _preview_ready(self, name: str, path: str) -> None:
+        # The list may have moved on while this was in flight.
+        s = self.targets.current()
+        if s is None or s.obj.name != name or self._preview_want != name:
+            return
+        self._show_preview(s.obj, path)
+
+    @Slot(str)
+    def _preview_failed(self, name: str) -> None:
+        if self._preview_want == name:
+            self.preview.clear(_("no preview — offline?"))
+
+    def _prefetch_previews(self) -> None:
+        """Cache every suggestion on screen, for a night with no signal.
+
+        This is the button that makes the feature work where the telescope is:
+        the pictures are fetched at home, over the kitchen wifi, and the field
+        only ever reads the disk.
+        """
+        if not self.chk_previews.isChecked():
+            self.on_log(_("previews are off — tick the box first"))
+            return
+        rows = self.targets._rows
+        want = [(s.obj, *self._preview_key(s.obj)) for s in rows]
+        missing = [(o, n, f) for o, n, f in want
+                   if self.preview_loader.cached(n, f) is None]
+        for o, name, fov in missing:
+            self.preview_loader.request(name, o.ra, o.dec, fov)
+        self.on_log(_("previews: {n} already cached, fetching {m}").format(
+            n=len(want) - len(missing), m=len(missing)))
+
+    def _factor_colour(self, factor: float) -> str:
+        """Which factor cost the object its score, at a glance."""
+        p = self.pal
+        return p.ok if factor >= 0.85 else (p.warn if factor >= 0.5 else p.bad)
+
+    def _use_suggestion(self, s) -> None:
+        """Chosen from the list: it becomes the target and FRAME opens.
+
+        Switching mode is the point — the next gesture is pushing the tube, and
+        that is the screen with the arrow on it.
+        """
+        if s is None:
+            return
+        self._apply_target(s.obj)
+        self.ed_goto.setText(s.obj.label.split(" (")[0])
+        self.rail.select("frame")
+
+    def _show_suggestion_on_map(self) -> None:
+        s = self.targets.current()
+        if s is None:
+            return
+        self._found = s.obj
+        self._set_view("map")
+        self._update_map()
+
+    # =================================================================== loupe
+    @property
+    def _loupe_on(self) -> bool:
+        """Whether the loupe should be drawing.
+
+        Asked of the button and the view rather than of `isVisible()`: a widget
+        answers False while its window is still hidden, which is exactly the
+        state the tests run in and would silently stop the crop from updating.
+        """
+        return self.btn_loupe.isChecked() and self._view in ("live", "stack")
+
+    def toggle_loupe(self, on: bool) -> None:
+        if on and self._view == "map":
+            # The loupe magnifies the last frame, so it has no meaning over the
+            # map: opening it there would show a frozen crop of nothing.
+            self._set_view("live")
+        self.loupe.setVisible(self._loupe_on)
+        if self._loupe_on:
+            self.loupe.set_palette(self.pal)
+            self.loupe.set_pinned(self._loupe_xy)
+            self.loupe.place()
+
+    def _pin_loupe(self, xy) -> None:
+        """Which star the loupe follows: a pinned one, or the brightest."""
+        self._loupe_xy = xy
+        if self.worker:
+            self.worker.set_loupe(xy)
+        self.loupe.set_pinned(xy)
+
+    def _image_clicked(self, ev) -> None:
+        if not self._loupe_on:
+            return
+        if self._q is None:
+            return
+        pos = self.vb.mapSceneToView(ev.scenePos())
+        x, y = float(pos.x()), float(pos.y())
+        h, w = self._q.shape[:2]
+        if not (0 <= x < w and 0 <= y < h):
+            return
+        self._pin_loupe((x, y))
+
+    def eventFilter(self, obj, ev) -> bool:
+        # The loupe floats over the image, so nothing in a layout moves it.
+        if obj is self.view and ev.type() == QEvent.Resize and self._loupe_on:
+            self.loupe.place()
+        return super().eventFilter(obj, ev)
+
     # ===================================================================== sky
     def _cat(self) -> Catalog | None:
-        if self._catalog is None:
-            try:
-                self._catalog = Catalog(self.settings.catalog_path()).load()
-                self.on_log(_("catalogue: {n} objects").format(
-                    n=len(self._catalog.objs)))
-            except Exception as e:
-                self.on_log(_("catalogue unavailable: {error}").format(error=e))
+        """The catalogue, loaded once.
+
+        A failed load is remembered: TARGETS asks for it once a minute while the
+        list follows the clock, and without this the log would fill with the same
+        warning all night. A retry still happens if the file turns up — someone
+        running `astrodoro catalog` in another terminal is exactly what the
+        warning asks for.
+        """
+        if self._catalog is not None:
+            return self._catalog
+        if self._cat_missing and not self.settings.catalog_path().exists():
+            return None
+        try:
+            self._catalog = Catalog(self.settings.catalog_path()).load()
+            self._cat_missing = False
+            self.on_log(_("catalogue: {n} objects").format(
+                n=len(self._catalog.objs)))
+        except Exception as e:
+            self._cat_missing = True
+            self.on_log(_("catalogue unavailable: {error}").format(error=e))
         return self._catalog
 
     # ================================================================== sensor
@@ -1892,7 +2487,7 @@ class MainWindow(QMainWindow):
 
         alt, az = p.altaz
         self.lbl_altaz.setText(
-            f"alt {alt:+5.1f}°   az {az:5.1f}°  {_compass_point(az)}")
+            f"alt {alt:+5.1f}°   az {az:5.1f}°  {compass_point(az)}")
         self.lbl_sensor.setText(self._sensor_state_text())
 
         now = time.monotonic()
@@ -1932,8 +2527,9 @@ class MainWindow(QMainWindow):
         self.lbl_goto.setText(_("no target"))
         self.lbl_goto_arrow.setText("")
         self.lbl_goto_dir.setFont(T_BODY())
-        self.lbl_goto_dir.setText(_("choose a target in the panel"))
+        self.lbl_goto_dir.setText(_("choose a target in TARGETS (2)"))
         self.btn_clear_target.setEnabled(False)
+        self._refresh_align_pick(force=True)
         if self._view == "map":
             self._update_map()
         self.on_log(_("target forgotten"))
@@ -2117,7 +2713,7 @@ class MainWindow(QMainWindow):
         alt = float(np.degrees(np.arcsin(np.clip(v[2], -1, 1))))
         az = float(np.degrees(np.arctan2(v[0], v[1])) % 360.0)
         where = (_("{alt:.0f}° up, {dir}").format(alt=alt,
-                                                  dir=_compass_point(az))
+                                                  dir=compass_point(az))
                  if alt > 0
                  else _("below the horizon ({alt:.0f}°)").format(alt=alt))
         self.on_log(f"{obj.label} — {where}")
@@ -2163,11 +2759,19 @@ class MainWindow(QMainWindow):
         if not o:
             self.lbl_goto.setText(_("'{text}' not found").format(text=text))
             return
+        self._apply_target(o)
+
+    def _apply_target(self, o) -> None:
+        """Adopt an object as the target, wherever it was chosen — the search
+        box, the map or the ranked list."""
         self._target = o
         self.btn_clear_target.setEnabled(True)
         self.lbl_goto.setText(
             f"{o.label}\n{o.kind_label} · RA {o.ra:.3f}° Dec {o.dec:+.3f}°")
         self._update_goto()
+        # The best alignment star is the one near where you are going, so the
+        # answer changes with the target.
+        self._refresh_align_pick(force=True)
 
     def _pos(self) -> tuple[float, float] | None:
         """Where the tube points, according to the phone sensor."""
@@ -2177,8 +2781,7 @@ class MainWindow(QMainWindow):
 
     def _fov_deg(self) -> float:
         """The longer side of the field, in degrees, from the optics and binning."""
-        w = self._q.shape[1] if self._q is not None else 1920
-        return self.pixel_scale() * w / 3600.0
+        return self._fov_arcmin()[0] / 60.0
 
     def _update_goto(self) -> None:
         if self._target is None:
@@ -2205,7 +2808,6 @@ class MainWindow(QMainWindow):
         p = self.pal
         spec = {"idle": (_("IDLE"), p.idle),
                 "framing": (_("FRAMING"), p.accent),
-                "focusing": (_("FOCUSING"), p.accent),
                 "live": (_("LIVE"), p.accent),
                 "exposing": (_("EXPOSING"), p.accent),
                 "integrating": (_("INTEGRATING"), p.ok),
@@ -2220,6 +2822,15 @@ class MainWindow(QMainWindow):
     def _on_tick(self) -> None:
         """The exposure bar: without it the program looks frozen during a 10 s
         sub. It is also where the alerts are evaluated."""
+        # The suggestions follow the clock while "now" is on. Once a minute is
+        # plenty: the sky turns 0.25° in that time and the ranking's altitude
+        # factor moves ~1% per degree. It lives here, not in the sensor tick,
+        # because choosing a target does not require the phone to be connected.
+        if (self._mode == "targets" and self.btn_now.isChecked()
+                and time.monotonic() - self._targets_t > 60.0):
+            self._refresh_targets()
+        if self._mode == "frame":
+            self._refresh_align_pick()        # throttled to 30 s inside
         if self.worker is None:
             self.prog.setValue(0)
             self.phase.setText(_("EXPOSURE"))
@@ -2332,8 +2943,7 @@ class MainWindow(QMainWindow):
             # that obvious, otherwise you think you are accumulating and are not.
             self._set_state("ready")
         else:
-            self._set_state({"frame": "framing", "focus": "focusing"}
-                            .get(st.get("mode"), "live"))
+            self._set_state("framing" if st.get("mode") == "frame" else "live")
 
         p = self.pal
         self.st_integ.set(_hms(st.get("integration", 0.0)))
@@ -2372,37 +2982,21 @@ class MainWindow(QMainWindow):
 
     @Slot(object, dict)
     def on_focus(self, crop, d: dict) -> None:
+        """The HFR reaches the vitals bar in every mode; the crop only reaches
+        the loupe when it is open — magnifying an image nobody is looking at
+        costs a percentile and a texture upload per frame."""
         hfr = d.get("hfr", float("nan"))
-        best = d.get("best", float("nan"))
         ratio = d.get("ratio", float("nan"))
         p = self.pal
         color = None
         if np.isfinite(ratio):
             color = p.ok if ratio < 1.05 else (p.warn if ratio < 1.3 else p.bad)
-        self.lbl_hfr.setText(f"{hfr:.2f}" if np.isfinite(hfr) else "—")
-        self.lbl_hfr.setStyleSheet(f"color: {color}" if color else "")
         self.st_hfr.set(f"{hfr:.2f}" if np.isfinite(hfr) else "—", color)
-        self.lbl_hfr_sub.setText(
-            _("median HFR · best {best:.2f}").format(best=best)
-            if np.isfinite(best) else _("median HFR"))
-        tr = d.get("trend", float("nan"))
-        self.lbl_verdict.setText(
-            d.get("verdict", "—")
-            + (f"   {tr:+.2f} px/min" if np.isfinite(tr) else ""))
-        t, h = d.get("series", (np.empty(0), np.empty(0)))
-        if len(t):
-            m = np.isfinite(h)
-            self.curve_focus.setData(t[m], h[m])
-        if np.isfinite(best):
-            self.line_best.setValue(best)
-        if crop is not None:
-            c = crop.astype(np.float32)
-            lo, hi = float(np.percentile(c, 5)), float(c.max())
-            self.loupe_img.setImage(
-                np.clip((c - lo) / max(hi - lo, 1e-6), 0, 1),
-                autoLevels=False, levels=(0, 1))
-        if self._mode == "focus":
-            self.beeper.beep_ratio(ratio)
+        if self._loupe_on:
+            self.loupe.set_focus(crop, d, p)
+        # The beep follows its own checkbox rather than the mode: focusing by
+        # ear is exactly what you do when you are not looking at the screen.
+        self.beeper.beep_ratio(ratio)
 
     @Slot(str)
     def on_flat_saved(self, path: str) -> None:
@@ -2524,7 +3118,12 @@ class MainWindow(QMainWindow):
         self.btn_view_stack.setChecked(which == "stack")
         self.btn_view_live.setChecked(which == "live")
         self.btn_view_map.setChecked(which == "map")
-        self.canvas.setCurrentIndex(1 if which == "map" else 0)
+        self.canvas.setCurrentIndex({"map": 1, "targets": 2}.get(which, 0))
+        # The loupe magnifies the last frame: over the map or the list there is
+        # nothing for it to magnify.
+        self.loupe.setVisible(self._loupe_on)
+        if self._loupe_on:
+            self.loupe.place()
         if which == "map":
             self._build_completer()
             self._update_map()
@@ -2532,9 +3131,11 @@ class MainWindow(QMainWindow):
         self._render(True)
 
     def toggle_view(self) -> None:
-        # The map stays out of the V cycle: switching stack/frame is a checking
-        # gesture, entering the map changes what you are doing.
-        self._set_view("live" if self._view in ("stack", "map") else "stack")
+        # The map and the target list stay out of the V cycle: switching
+        # stack/frame is a checking gesture, opening either of the others
+        # changes what you are doing.
+        self._set_view("live" if self._view in ("stack", "map", "targets")
+                       else "stack")
 
     def _update_view_label(self) -> None:
         st = self._last_stats
@@ -2554,6 +3155,20 @@ class MainWindow(QMainWindow):
             txt += "   ·   " + _("Esc returns to live")
             self.lbl_view.setText(txt)
             self.lbl_view.setStyleSheet(f"color: {p.ok if ok else p.bad}")
+            return
+        if self._view == "targets":
+            n = self.targets.rowCount()
+            when = self._targets_when()
+            txt = _("{n} suggestions for {when}").format(
+                n=n, when=when.strftime("%d/%m %H:%M"))
+            if self._sky is not None:
+                txt += " · " + self._sky.moon_text()
+                if not self._sky.dark:
+                    txt += " · " + self._sky.twilight_text()
+            self.lbl_view.setText(txt)
+            self.lbl_view.setStyleSheet(
+                "" if self._sky is None or self._sky.dark
+                else f"color: {p.warn}")
             return
         if self._view == "map":
             pt = self.point
@@ -2792,6 +3407,11 @@ class MainWindow(QMainWindow):
         s.elevation_m = self.sp_elev.value()
         s.focal_length_mm = self.sp_focal.value()
         s.pixel_size_um = self.sp_pixel.value()
+        s.target_min_alt = self.sp_min_alt.value()
+        s.target_max_mag = self.sp_max_mag.value()
+        s.target_family = self.cb_family.currentData()
+        s.target_fits_only = self.chk_fits.isChecked()
+        s.previews_enabled = self.chk_previews.isChecked()
         try:
             s.save()
         except OSError:
@@ -2802,6 +3422,7 @@ class MainWindow(QMainWindow):
             self.thread.quit()
             self.thread.wait(2000)
         self.hs.stop()
+        self.preview_loader.shutdown()
         super().closeEvent(ev)
 
 
@@ -2828,18 +3449,6 @@ def _shorten(path: str, keep: int = 34) -> str:
     if p.startswith(home):
         p = "~" + p[len(home):]
     return p if len(p) <= keep else "…" + p[-(keep - 1):]
-
-
-#: The 16 compass points. Translated because they differ by language.
-_COMPASS = (N_("N"), N_("NNE"), N_("NE"), N_("ENE"),
-            N_("E"), N_("ESE"), N_("SE"), N_("SSE"),
-            N_("S"), N_("SSW"), N_("SW"), N_("WSW"),
-            N_("W"), N_("WNW"), N_("NW"), N_("NNW"))
-
-
-def _compass_point(az_deg: float) -> str:
-    """Azimuth as a compass point. In the dark, "SE" arrives before "134°"."""
-    return _(_COMPASS[int((az_deg % 360.0) / 22.5 + 0.5) % 16])
 
 
 def _arrow(g) -> str:

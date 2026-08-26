@@ -94,6 +94,21 @@ class Settings:
     night_level: int = 1         # 0..2, only meaningful for the night theme
     large_targets: bool = False  # bigger click targets for gloved fingers
 
+    # --- target suggestions -------------------------------------------------
+    # What the TARGETS list is willing to suggest. The minimum altitude is the
+    # one that depends on the site rather than on taste: a garden with a wall to
+    # the east has a different floor from an open field.
+    target_min_alt: float = 25.0
+    target_max_mag: float = 12.0
+    target_family: str = "all"
+    #: Hide anything larger than the frame. Off by default — a slice of a large
+    #: nebula is still worth a night.
+    target_fits_only: bool = False
+    #: Fetch DSS thumbnails of the suggestions. On by default, but every read
+    #: goes to the disk cache first: in the field there is no internet, and what
+    #: was fetched at home is what you have.
+    previews_enabled: bool = True
+
     # --- capture defaults ---------------------------------------------------
     exposure_s: float = 5.0
     gain: int = 250

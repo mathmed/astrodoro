@@ -197,6 +197,15 @@ QSplitter::handle {{ background: transparent; }}
 QSplitter::handle:horizontal {{ width: 8px; }}
 QSplitter::handle:vertical {{ height: 8px; }}
 
+QTableView {{ background: {p.surface}; border: 1px solid {p.border};
+    border-radius: 7px; gridline-color: transparent; outline: none;
+    color: {p.text}; }}
+QTableView::item {{ padding: 2px 8px; border: none; }}
+QTableView::item:selected {{ background: {p.accent}; color: {p.bg}; }}
+QHeaderView::section {{ background: {p.bg}; color: {p.text_dim}; border: none;
+    border-bottom: 1px solid {p.border}; padding: 5px 8px; }}
+QTableCornerButton::section {{ background: {p.bg}; border: none; }}
+
 QStackedWidget {{ background: transparent; }}
 QToolTip {{ background: {p.surface2}; color: {p.text};
             border: 1px solid {p.border}; padding: 5px; }}
@@ -576,9 +585,17 @@ class ModeRail(QWidget):
             b.setIcon(self._provider(name, b.isChecked()))
             b.setIconSize(QSize(17, 17))
 
-    def select(self, key: str) -> None:
+    def mark(self, key: str) -> None:
+        """Show `key` as the selected mode without announcing it.
+
+        For a mode changed in code: `select` would emit, the window would call
+        back into the rail, and the two would bounce off each other.
+        """
         for k, b in self.buttons.items():
             b.setChecked(k == key)
         self.current = key
         self.refresh_icons()
+
+    def select(self, key: str) -> None:
+        self.mark(key)
         self.changed.emit(key)

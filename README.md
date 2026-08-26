@@ -63,16 +63,70 @@ phase of the night needs a different screen, and the mode rearranges both sides.
 The first three modes are the phases of a night; the fourth holds what you set
 once and then forget.
 
-| mode | key | panel | context beside the image |
+| mode | key | panel | in the place of the image |
 | --- | --- | --- | --- |
-| Frame | `1` | phone sensor, alignment, target, camera source | target direction and objects in the field |
-| Focus | `2` | large HFR, verdict, beep | 5x loupe and HFR over time |
-| Integrate | `3` | stretch, per-channel gain, gradient, stacking, dark, flat, recording | histogram and residual rotation |
+| Frame | `1` | phone sensor, which star to align on, camera source | live frame; target direction and objects in the field below |
+| Targets | `2` | hour, filters, target by name | the ranked list, with why each object scored what it did |
+| Integrate | `3` | stretch, per-channel gain, gradient, stacking, dark, flat, recording | stack; histogram and residual rotation below |
 | Config | `4` | folders, observing site, optics, language, display | full-width histogram |
 
-Other keys: `V` toggles stack/frame, `M` the sky map, `F` image only, `N` night
-mode, `L` the log, `space` marks a new segment, `Esc` leaves a frame review,
-`Ctrl+S` saves what is on screen.
+Focusing is not a mode: the **loupe** (`Z`, or the button on the image bar) is a
+5x view of a star that floats over the frame in any mode, with the HFR, the
+session best and the beep. Focus is not a phase of the night — it is something
+you redo whenever the temperature drifts, in the middle of whatever you were
+doing. Click the image to pin the loupe to a particular star.
+
+Other keys: `V` toggles stack/frame, `M` the sky map, `Z` the loupe, `F` image
+only, `N` night mode, `L` the log, `space` marks a new segment, `Esc` leaves a
+frame review, `Ctrl+S` saves what is on screen.
+
+### Which star to align on
+
+The sensor needs one star, and picking it is the step where people give up:
+179 names in the dark, and aligning on the wrong star of a close pair gives a
+confident, wrong position all night. Frame names one and offers to align on it,
+weighing four things — bright, **unmistakable** (no similar star within a few
+degrees), comfortable to reach (not at the zenith, where the Dobsonian is
+awkward, nor at the wall), and **as close to the target as possible**, because
+one star corrects two axes and its accuracy is local. Pick a target in Targets
+and the answer changes: with M8 chosen it says Antares, 21° away. `↻` offers the
+next one when the first is behind a tree, `☆` shows it on the sky map.
+
+### What to image tonight
+
+**Targets** answers the question a catalogue does not: of everything above the
+horizon *at this hour*, what is worth pointing at. Each object is scored by six
+things, and the panel beside the list shows all six so the ranking can be argued
+with:
+
+- **altitude** — atmospheric extinction, 0.25 mag per airmass, with a penalty
+  above 80° where the Dobsonian is awkward and the azimuth unstable;
+- **remaining window** — minutes left above your minimum altitude, against the
+  ~45 minutes a useful run on one object takes;
+- **the Moon** — its phase, its distance and its height, weighted per family: a
+  gibbous Moon 40° away ruins a face-on galaxy and barely touches a globular;
+- **size in the frame** — the comfortable band is 15%..70% of the short side
+  (55'x37' with a 1200 mm and this sensor at bin2);
+- **surface brightness** — not the integrated magnitude: M31 is magnitude 3.4
+  and still a faint smudge, because that light is spread over half a degree;
+- **whether anyone ever named it** — a catalogue does not record which objects
+  are worth a night, and this is the closest thing to that fact in the data.
+  Without it the first fifteen suggestions on a real evening were fifteen
+  anonymous open clusters, high, small and moon-proof, and none of them is why
+  anyone goes outside.
+
+Each suggestion also shows **what it looks like**: a DSS survey cutout with your
+own frame drawn on it, which answers "will it fit" faster than any pair of
+numbers. Pictures are fetched once and kept on disk — there is no internet in
+the field, so **cache the photos of this list** before going out, and untick
+*show a photo of the object* if you would rather the program never touched the
+network.
+
+The hour is a field, not just "now": the decision is usually made at dusk, and
+what matters is what will be well placed at eleven. Filter by type, magnitude,
+minimum altitude and "only what fits in the frame"; double-click a row (or
+`Enter`) to make it the target and land in Frame, where the arrow says which way
+to push the tube.
 
 ### As a macOS app
 
@@ -156,7 +210,8 @@ make handset    # in another
 
 ```
 src/astrodoro/
-├── core/         frame pipeline: calibration → stars → registration → stacking
+├── core/         frame pipeline: calibration → stars → registration → stacking,
+│                 plus the target ranking (tonight.py)
 ├── pointing/     where the tube points: phone server, orientation, sky data
 ├── drivers/      camera drivers (svbony); nothing above here talks to an SDK
 ├── ui/           Qt interface: window, capture thread, design system, sky map

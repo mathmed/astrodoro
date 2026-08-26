@@ -1053,6 +1053,130 @@ def visible(lat: float, lon: float, when=None, min_alt: float = 20.0,
     return out
 
 
+@dataclass(frozen=True)
+class Pick:
+    """A star proposed for alignment, with the reasons kept alongside."""
+    star: Star
+    alt: float
+    az: float
+    score: float                 # 0..1
+    #: Degrees to the chosen target, NaN when there is no target yet.
+    target_sep: float
+    #: Degrees to the nearest star of comparable brightness — how easy it is to
+    #: be sure you sighted this one and not its neighbour.
+    neighbour_sep: float
+
+
+#: Below this the alignment inherits more than half an arcminute of refraction,
+#: and in a back garden it is where the wall and the lamp post are.
+FLOOR_ALT = 20.0
+
+#: A star is confusable with one within this much of its own magnitude.
+CONFUSABLE_MAG = 1.5
+
+#: Beyond this separation from any comparable star, no confusion is possible.
+UNMISTAKABLE_DEG = 6.0
+
+
+def for_alignment(lat: float, lon: float, when=None,
+                  target: tuple[float, float] | None = None,
+                  min_alt: float = FLOOR_ALT, max_mag: float = 3.0,
+                  elevation_m: float = 0.0, limit: int = 5) -> list[Pick]:
+    """Which star to align on right now, best first.
+
+    "Brightest visible" is the obvious answer and the wrong one. What makes an
+    alignment good is four things, and only one of them is brightness:
+
+    - **it is unmistakable** — you have to be *certain* which star you sighted.
+      A lone second-magnitude star beats a brighter one with a companion three
+      degrees away, because aligning on the wrong star of a pair is a mistake
+      that produces a confident, wrong position;
+    - **it is comfortable to reach** — near the zenith a Dobsonian is awkward
+      and the azimuth unstable (`pushto.guide` warns about the same 80 degrees);
+      near the horizon refraction and the neighbour's wall get in the way;
+    - **it is near the target** — a one-star correction is most accurate around
+      the star used, so aligning close to where you are going is worth more than
+      aligning on something spectacular on the other side of the sky. This is
+      why `target` changes the answer;
+    - **it is bright**, which is what the magnitude limit already ensures. It
+      breaks ties rather than deciding.
+    """
+    from ..core.catalog import angular_sep
+
+    # One transform for everything, half a magnitude past the limit: a star
+    # just under the cut still confuses the eye, so it counts as a neighbour
+    # even though it is not itself a candidate.
+    sky = visible(lat, lon, when, min_alt=-90.0, max_mag=max_mag + 1.0,
+                  elevation_m=elevation_m)
+    if not sky:
+        return []
+    alt = np.array([a for _s, a, _z in sky])
+    az = np.array([z for _s, _a, z in sky])
+    mag = np.array([s.mag for s, _a, _z in sky])
+    enu = _enu(alt, az)
+    cos = np.clip(enu @ enu.T, -1.0, 1.0)
+    sep = np.degrees(np.arccos(cos))
+    np.fill_diagonal(sep, np.inf)
+
+    out: list[Pick] = []
+    for i, (star, a, z) in enumerate(sky):
+        if a < min_alt or star.mag > max_mag:
+            continue
+        comparable = mag <= mag[i] + CONFUSABLE_MAG
+        near = float(sep[i][comparable].min()) if comparable.any() else 180.0
+        t_sep = (angular_sep(star.ra, star.dec, target[0], target[1])
+                 if target is not None else float("nan"))
+        score = (_f_mag(star.mag) * _f_alt(a) * _f_isolation(near)
+                 * _f_target(t_sep))
+        out.append(Pick(star, float(a), float(z), float(score), t_sep, near))
+
+    out.sort(key=lambda p: -p.score)
+    return out[:limit]
+
+
+def _enu(alt_deg: np.ndarray, az_deg: np.ndarray) -> np.ndarray:
+    a, z = np.radians(alt_deg), np.radians(az_deg)
+    return np.column_stack([np.cos(a) * np.sin(z), np.cos(a) * np.cos(z),
+                            np.sin(a)])
+
+
+def _f_mag(mag: float) -> float:
+    """Brightness, as a tie-breaker: the limit already did the real filtering.
+
+    Flat from first magnitude up — Vega and Antares are both simply obvious —
+    and only second magnitude and fainter start to cost anything.
+    """
+    return float(np.clip((4.0 - mag) / 3.0, 0.3, 1.0))
+
+
+def _f_alt(alt: float) -> float:
+    """Comfort of the push. Flat across the useful band, falling at both ends."""
+    return float(np.interp(alt, [0.0, 20.0, 30.0, 65.0, 78.0, 90.0],
+                           [0.0, 0.30, 1.0, 1.0, 0.5, 0.25]))
+
+
+def _f_isolation(neighbour_deg: float) -> float:
+    return float(np.clip(neighbour_deg / UNMISTAKABLE_DEG, 0.35, 1.0))
+
+
+def _f_target(sep_deg: float) -> float:
+    """How much the alignment is worth where you are going.
+
+    Steep on purpose, and the slope is measured rather than chosen:
+    `test_pushto` walks 25 degrees from the alignment star with a 2.6-degree
+    crooked mount and lands tens of arcminutes off. A single star corrects two
+    axes, so its accuracy is local; a magnificent star on the other side of the
+    sky is a worse alignment than a second-magnitude one next to the target.
+
+    Not a cliff either — the star still has to be identifiable, which is what
+    the other three factors weigh.
+    """
+    if not np.isfinite(sep_deg):
+        return 1.0
+    return float(np.interp(sep_deg, [0.0, 15.0, 40.0, 90.0, 180.0],
+                           [1.0, 0.95, 0.55, 0.20, 0.08]))
+
+
 def nearest(alt: float, az: float, lat: float, lon: float, when=None,
             min_alt: float = 20.0, max_mag: float = 3.0,
             limit: int = 5, elevation_m: float = 0.0

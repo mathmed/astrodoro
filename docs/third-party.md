@@ -32,6 +32,28 @@ failing before starting. Together they are about 92 KB.
 | what | source | licence | how |
 | --- | --- | --- | --- |
 | `data/NGC.csv` | OpenNGC (Mattia Verga) — complete NGC + IC, ~14k objects | CC BY-SA 4.0 | `astrodoro catalog` |
+| object thumbnails | DSS2 colour, cut out by the CDS `hips2fits` service (Strasbourg) | see below | fetched on demand into the user's own cache |
+
+### About the thumbnails
+
+The pictures in the TARGETS panel are cutouts of the **Digitized Sky Survey**,
+rendered by the CDS `hips2fits` service from the `CDS/P/DSS2/color` HiPS. They
+are **not redistributed with this program**: each installation fetches what it
+looks at into its own cache directory (`previews/` under the user data folder),
+one 512x512 JPEG per object and field, about 30 KB each.
+
+The DSS plates are free for non-commercial use with acknowledgement, which is
+why "DSS2" is painted on every thumbnail rather than kept in a credits screen.
+The full acknowledgement the survey asks for:
+
+> Based on photographic data obtained using the Oschin Schmidt Telescope on
+> Palomar Mountain and the UK Schmidt Telescope, digitised by the Space
+> Telescope Science Institute. Served by the Centre de Données astronomiques de
+> Strasbourg (CDS).
+
+Anyone repackaging this program commercially has to check those terms; nothing
+else in the feature depends on the service, and `core/previews.py` is one
+`SERVICE` constant away from another provider.
 
 ## Vendor binaries
 

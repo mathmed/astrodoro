@@ -58,10 +58,13 @@ src/astrodoro/
 │   ├── equatorial.py   residual rotation of the platform
 │   ├── polar.py        polar alignment from solved positions
 │   ├── cooling.py      TEC ramp, saturation, warm-up
-│   └── catalog.py      OpenNGC lookup
+│   ├── catalog.py      OpenNGC lookup
+│   ├── tonight.py      which objects are worth imaging now, and why
+│   └── previews.py     DSS cutouts of an object: cache first, network optional
 ├── pointing/     handset server, orientation maths, star and constellation data
 ├── drivers/      svbony: ctypes binding plus a Pythonic wrapper
-├── ui/           Qt: window, capture thread, design system, sky map, history
+├── ui/           Qt: window, capture thread, design system, sky map, history,
+│                 ranked target list, floating loupe
 ├── cli/          argparse commands
 ├── i18n/         catalogues and the runtime loader
 └── settings.py   user settings
@@ -105,6 +108,10 @@ mode this program has. The reasoning behind each is in
   `elong`, `halo` and the `limits` dict; a new criterion has to appear there too.
 - **Detection uses the central 70% only.** Edge coma biases the centroid. The
   stack uses the whole frame.
+- **A suggestion's score is auditable, factor by factor.** `tonight.rank` fills
+  `Suggestion.factors` and the TARGETS panel shows every one of them, for the
+  same reason a rejected frame shows its measurements. A new factor has to
+  appear there too, otherwise the score becomes an oracle.
 - **GUI parameters reach the worker through `request(**kw)` / `flag(name)`** — a
   dict under a lock, applied between frames. **Do not use Qt slots** for this:
   the loop is blocked inside `SVBGetVideoData` for the whole exposure and that
@@ -161,8 +168,11 @@ What the suite covers, and why each test exists:
 | `test_stacker_synthetic.py` | end-to-end SNR gain and surviving a platform reset |
 | `test_stacker_smear.py` | the smear that elongation cannot see |
 | `test_orientation.py` | a flipped sign in the alignment, which doubles the error |
-| `test_pushto.py` | the arrow pointing confidently the wrong way |
+| `test_pushto.py` | the arrow pointing confidently the wrong way, and the alignment star suggested on the far side of the sky |
 | `test_gui_framing.py` | every gesture of the Frame mode actually running |
+| `test_gui_targets.py` | the suggestion list, the hour field and the loupe running |
+| `test_tonight.py` | the ranking suggesting something below the horizon, or ignoring the Moon |
+| `test_previews.py` | a thumbnail cache that re-downloads, or an offline night raising instead of shrugging |
 | `test_gui_frame_review.py` | clicking a health mark and getting that frame back |
 | `test_settings.py` | a corrupt settings file must never stop the program |
 | `test_i18n.py` | a missing translation must fall back, never blank a label |

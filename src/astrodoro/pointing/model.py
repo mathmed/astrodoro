@@ -73,6 +73,9 @@ class Pointing:
         # affordance AstroHopper offers, and the only way to recognise where you
         # are pointing with no magnetometer. Aligning on a star absorbs it.
         self.manual_az: float = 0.0
+        #: Constant taking the device's relative `alpha` to the compass's
+        #: reading. Frozen at the moment of alignment — see `feed`.
+        self._compass_offset: float = 0.0
         self._smooth = Smoother(tau=tau)
         self._buf: deque[tuple[float, float, float, float]] = deque(maxlen=200)
         self._fwd: np.ndarray | None = None
@@ -86,14 +89,21 @@ class Pointing:
              compass: float | None = None, t: float | None = None) -> None:
         t = time.monotonic() if t is None else t
         self.compass = compass
-        # Before aligning, the compass stands in for alpha so the map does not
-        # come up rotated at random. After aligning it is discarded: the
-        # relative alpha's offset is already frozen inside the alignment matrix,
-        # and next to a metal tube the compass is the worse of the two.
+        # Before aligning, the compass positions the map so it does not come up
+        # rotated at random. It does so as an *offset* on the relative alpha,
+        # never by replacing it: the two have an arbitrary difference between
+        # them (on iOS `webkitCompassHeading` and `event.alpha` share no
+        # origin), and substituting the value meant that aligning solved for one
+        # source and the tracking that followed used the other. The sky then
+        # jumped by that whole difference — 130 degrees in the reproduction —
+        # right after the alignment claimed to have succeeded. The offset is
+        # updated only while unaligned, so aligning freezes it and the
+        # magnetometer stops being consulted next to the metal tube, which is
+        # what the docstring above always promised.
         if self.align is None and compass is not None:
-            alpha = float(compass)
-        alpha += self.manual_az
-        self._buf.append((t, alpha, beta, gamma))   # manual nudge included
+            self._compass_offset = (float(compass) - alpha) % 360.0
+        alpha += self._compass_offset + self.manual_az
+        self._buf.append((t, alpha, beta, gamma))   # offsets included
         self._fwd = self._smooth.update(self._sight(alpha, beta, gamma), t)
         self._t = t
 
@@ -109,6 +119,7 @@ class Pointing:
         self.align = None
         self.star = None
         self.manual_az = 0.0
+        self._compass_offset = 0.0
         self._smooth.reset()
         self._buf.clear()
         self._fwd = None
