@@ -177,6 +177,9 @@ def test_the_twilight_text_names_the_stage_of_the_night():
     assert "Sun is up" in sky(sun_alt=5.0).twilight_text()
     assert not sky(sun_alt=-10.0).dark
     assert sky(sun_alt=-20.0).dark
+    # A dark sky says nothing: the text exists to warn, and there is nothing to
+    # warn about for the rest of the night.
+    assert sky(sun_alt=-20.0).twilight_text() == ""
 
 
 @pytest.mark.parametrize("az,expected", [(0, "N"), (90, "E"), (180, "S"),

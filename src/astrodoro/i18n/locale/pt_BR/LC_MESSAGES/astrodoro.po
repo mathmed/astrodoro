@@ -558,10 +558,6 @@ msgstr "arcsinh"
 msgid "as fast as possible"
 msgstr "o mais rápido"
 
-#: src/astrodoro/core/tonight.py:126
-msgid "astronomical night — the sky is dark"
-msgstr "noite astronômica — o céu está escuro"
-
 #: src/astrodoro/core/tonight.py:124
 msgid "astronomical twilight ({alt:.0f}°) — nearly dark"
 msgstr "crepúsculo astronômico ({alt:.0f}°) — quase escuro"

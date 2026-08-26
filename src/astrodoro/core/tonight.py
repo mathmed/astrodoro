@@ -111,6 +111,13 @@ class Sky:
         return self.moon_alt > 0.0
 
     def twilight_text(self) -> str:
+        """How much light is still in the sky, or `""` once it is properly dark.
+
+        The dark case says nothing on purpose: it is the normal state of an
+        observing night, and a line reading "the sky is dark" from dusk to dawn
+        is a line nobody reads — what keeps limiting targets after −18° is the
+        Moon, which has its own text. Callers must cope with the empty string.
+        """
         if self.sun_alt > 0:
             return _("the Sun is up ({alt:.0f}°) — nothing to image yet").format(
                 alt=self.sun_alt)
@@ -123,7 +130,7 @@ class Sky:
         if self.sun_alt > -18:
             return _("astronomical twilight ({alt:.0f}°) — nearly dark").format(
                 alt=self.sun_alt)
-        return _("astronomical night — the sky is dark")
+        return ""
 
     def moon_text(self) -> str:
         pct = self.moon_illum * 100

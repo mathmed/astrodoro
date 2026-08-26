@@ -93,6 +93,7 @@ from .design import (
     T_SMALL,
     T_XL,
     Card,
+    ElidedLabel,
     HealthStrip,
     ModeRail,
     Palette,
@@ -331,7 +332,13 @@ class MainWindow(QMainWindow):
         ev = QVBoxLayout(expo)
         ev.setContentsMargins(0, 1, 0, 1)
         ev.setSpacing(3)
-        self.phase = QLabel(_("EXPOSURE"))
+        # Elided in the middle: this text changes on every frame — "EXPOSURE"
+        # (8 chars) becomes "READING AND PROCESSING  +7.9s" (29) — and as a
+        # plain label that took the window's minimum width from 1271 px to
+        # 1364 px and back, so the window grew by itself between frames. Middle
+        # rather than right because the seconds at the end are the point.
+        self.phase = ElidedLabel(_("EXPOSURE"), mode=Qt.ElideMiddle,
+                                 min_chars=6)
         self.phase.setObjectName("statLabel")
         self.phase.setFont(label_font())
         self.prog = QProgressBar()
@@ -1240,7 +1247,11 @@ class MainWindow(QMainWindow):
         self.btn_loupe.toggled.connect(self.toggle_loupe)
         hb.addWidget(self.btn_loupe)
 
-        self.lbl_view = QLabel("—")
+        # Elided, not plain: this line grows with the frame's measurements and
+        # with the night's summary, and a plain label reports its whole text as
+        # a minimum width — that is what widened the window past the screen when
+        # TARGETS opened and again on every accepted frame.
+        self.lbl_view = ElidedLabel("—")
         self.lbl_view.setFont(T_MONO())
         hb.addSpacing(10)
         hb.addWidget(self.lbl_view, 1)
@@ -2170,7 +2181,10 @@ class MainWindow(QMainWindow):
             self.on_log(_("could not read the sky: {error}").format(error=e))
             return
         self._sky = sky
-        self.lbl_sky.setText(sky.twilight_text() + "\n" + sky.moon_text())
+        # Only the lines that say something: `twilight_text` is empty once the
+        # sky is dark, and a leading blank line reads as a missing reading.
+        self.lbl_sky.setText("\n".join(t for t in (sky.twilight_text(),
+                                                   sky.moon_text()) if t))
 
         fov = self._fov_arcmin()
         self.lbl_fov.setText(_("frame {w:.0f}' x {h:.0f}'").format(w=fov[0],
@@ -3163,8 +3177,9 @@ class MainWindow(QMainWindow):
                 n=n, when=when.strftime("%d/%m %H:%M"))
             if self._sky is not None:
                 txt += " · " + self._sky.moon_text()
-                if not self._sky.dark:
-                    txt += " · " + self._sky.twilight_text()
+                twilight = self._sky.twilight_text()
+                if twilight:
+                    txt += " · " + twilight
             self.lbl_view.setText(txt)
             self.lbl_view.setStyleSheet(
                 "" if self._sky is None or self._sky.dark

@@ -285,6 +285,86 @@ class Card(QFrame):
         return w
 
 
+class ElidedLabel(QLabel):
+    """A one-line readout that shrinks instead of widening the window.
+
+    A plain `QLabel` reports the width of its whole text as its *minimum* width,
+    and Qt honours a layout's minimum by resizing the window: one long readout —
+    the object's name, the view bar's line of measurements — was enough to make
+    the window wider than the screen, with its right edge out of sight. Measured
+    on the TARGETS screen: the summary line asked for 992 px and took the central
+    widget's minimum from 1334 px to 2082 px.
+
+    So the width is decided by the layout, not by the text: whatever does not fit
+    is elided, and the full string stays in the tooltip. `text()` still answers
+    the full string — the elision is only what gets painted.
+    """
+
+    #: Class-level defaults so a paint or resize that arrives before `__init__`
+    #: finishes still has something to read.
+    _full = ""
+    _mode = Qt.ElideRight
+    _min_chars = 8
+    _tip = ""
+
+    def __init__(self, text: str = "", mode=Qt.ElideRight, min_chars: int = 8,
+                 parent: QWidget | None = None):
+        super().__init__(text, parent)
+        self._full = text
+        self._mode = mode
+        self._min_chars = min_chars
+        self._tip = ""
+
+    # ------------------------------------------------------------------- text
+    def text(self) -> str:
+        return self._full
+
+    def setText(self, text: str) -> None:
+        self._full = text
+        self._elide()
+        self.updateGeometry()
+
+    def setToolTip(self, tip: str) -> None:
+        """A tooltip set from outside wins over the full-text one."""
+        self._tip = tip
+        super().setToolTip(tip)
+
+    def _elide(self) -> None:
+        w = self.contentsRect().width()
+        fm = self.fontMetrics()
+        shown = self._full if w <= 0 else fm.elidedText(self._full, self._mode, w)
+        # Only when it actually changed: `QLabel.setText` invalidates the layout,
+        # and re-eliding on every resize event would re-enter the layout pass.
+        if shown == QLabel.text(self):
+            return
+        super().setText(shown)
+        if not self._tip:
+            super().setToolTip("" if shown == self._full else self._full)
+
+    # ----------------------------------------------------------------- events
+    def resizeEvent(self, ev) -> None:
+        super().resizeEvent(ev)
+        self._elide()
+
+    def setFont(self, f) -> None:
+        super().setFont(f)
+        self._elide()
+
+    # ------------------------------------------------------------------ sizes
+    def minimumSizeHint(self) -> QSize:
+        fm = self.fontMetrics()
+        return QSize(fm.horizontalAdvance("0") * self._min_chars,
+                     super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QSize:
+        """Asked from the *full* text: the layout should still hand over the
+        whole width when there is width to hand over."""
+        fm = self.fontMetrics()
+        m = self.contentsMargins()
+        return QSize(fm.horizontalAdvance(self._full) + m.left() + m.right() + 2,
+                     super().sizeHint().height())
+
+
 class Stat(QWidget):
     """Small label on top, large value underneath — the unit of the vitals bar.
 
@@ -301,7 +381,10 @@ class Stat(QWidget):
         self.lab = QLabel(label.upper())
         self.lab.setObjectName("statLabel")
         self.lab.setFont(label_font())
-        self.val = QLabel(value)
+        # Elided: an object's full name ("NGC 6543 (Cat's Eye Nebula)") in the
+        # 22 pt display font asks for ~600 px, and a plain label would take the
+        # whole window with it.
+        self.val = ElidedLabel(value, min_chars=4)
         self.val.setFont(T_XL() if big else T_L())
         v.addWidget(self.lab)
         v.addWidget(self.val)

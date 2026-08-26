@@ -433,3 +433,47 @@ concurrent workers, not more: the CDS runs that service for everyone.
 The rectangle is the whole reason the picture is there. "M8 is 45 arcminutes"
 and "the frame is 51x29" are two numbers nobody composes in their head at
 midnight; the same fact drawn on the real sky is instant.
+
+---
+
+## Text never decides the window's width
+
+`ui/design.py` (`ElidedLabel`)
+
+A `QLabel` reports the width of its whole text as its **minimum** width, and Qt
+satisfies a layout's minimum by resizing the *window*. So a readout that grows
+with the night was enough to drag the window wider than the screen and push its
+right edge out of sight, with no way to get it back other than dragging the
+title bar.
+
+Measured on the offscreen build, as the minimum width of the central widget:
+
+| what changed | before | after |
+| --- | --- | --- |
+| idle, FRAME mode | 1334 px | 1271 px |
+| opening TARGETS (the summary line: "60 suggestions for … · the Sun is up") | 2082 px | 1271 px |
+| the exposure phase going from "EXPOSURE" to "READING AND PROCESSING  +7.9s" | 1364 px | 1271 px |
+| a reviewed frame's line, with the five measurements and their rulers | +1500 px | 1271 px |
+
+The phase one is why the window also grew *between frames*: the text changes on
+every frame, so the window widened and narrowed on its own all night.
+
+`ElidedLabel` gives the decision back to the layout — it elides what does not
+fit, keeps the full string in the tooltip, and answers `text()` with the full
+string so the elision is only what gets painted. Three labels use it: the view
+bar's line, the exposure phase and every `Stat` value (an object's full name in
+the 22 pt display font asks for ~600 px on its own).
+
+Two things that were **not** the fix:
+
+- **word wrap.** It caps the minimum at the longest *word*, which is no cap at
+  all for a filename or a catalogue designation — and it steals height from the
+  image to buy width.
+- **a maximum width on the column.** The left column has had `setMaximumWidth`
+  since the beginning and the window grew anyway: `QSplitter` adds up its
+  children's minimum hints, and a maximum does not lower a minimum.
+
+The remaining 1271 px floor is the vitals card (1255 px), which is a row of
+fixed-width readouts and not text-driven. `tests/test_gui_window_width.py`
+holds the floor: it fails if any mode, view, long readout or arriving frame
+moves it.
