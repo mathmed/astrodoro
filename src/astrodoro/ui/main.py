@@ -13,13 +13,14 @@ It now floats over the image in any mode (`ui/loupe.py`), and the HFR it used to
 show large is the one the vitals bar carries all night anyway.
 
 Above all of that sits a vitals bar that never leaves the screen, because in the
-dark you glance, you do not read panels.
+dark you glance, you do not read panels, and above that a top bar with what is
+not a phase of anything: the display toggles and the configuration window.
 """
 from __future__ import annotations
 
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,8 @@ from PySide6.QtCore import (
     QDateTime,
     QEvent,
     QObject,
+    QPointF,
+    QRectF,
     QSize,
     Qt,
     QThread,
@@ -36,10 +39,14 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import (
+    QColor,
     QGuiApplication,
     QImage,
     QKeySequence,
+    QPainter,
+    QPen,
     QPixmap,
+    QPolygonF,
     QShortcut,
 )
 from PySide6.QtWidgets import (
@@ -50,6 +57,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QCompleter,
     QDateTimeEdit,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QGridLayout,
@@ -70,8 +78,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core import background, previews, stretch, tonight
-from ..core.catalog import Catalog
+from ..core import lucky, platform_align, previews, stretch, tonight
+from ..core.catalog import Catalog, angular_sep
 from ..core.tonight import compass_point
 from ..drivers.svbony import list_cameras
 from ..i18n import N_, set_language
@@ -126,9 +134,24 @@ MODES = [
      "list"),
     ("stack", N_("3  INTEGRATE"),
      N_("stack, record and follow the platform"), "stack"),
-    ("config", N_("4  CONFIG"),
-     N_("folders, observing site, optics and language"), "adjust"),
+    ("lucky", N_("4  PLANETS"),
+     N_("the Moon and the planets: nothing to stack — exposure guard, contrast "
+        "focus and burst recording"), "moon"),
 ]
+
+#: The configuration window's shortcut. Qt maps "Ctrl" to Command on macOS, so
+#: this is the platform's own preferences key on every platform.
+CONFIG_SHORTCUT = "Ctrl+,"
+
+#: What the bright-body view does instead of an autostretch: white point as a
+#: fraction of full scale, and the display exponent. There is no faint signal to
+#: lift here, and a stretch built for a nebula flattens the maria into grey.
+LUCKY_WHITE = (10, 100)
+LUCKY_GAMMA = (30, 100)
+
+#: How much of the view the measuring window fills when following is switched
+#: on: the body plus enough sky around it to see that it is being followed.
+FOLLOW_ZOOM = 3.0
 
 #: Stretch presets: (target background, shadow clip).
 STRETCH_PRESETS = {N_("soft"): (0.15, 3.2), N_("medium"): (0.25, 2.8),
@@ -139,6 +162,24 @@ REPLAY_SPEEDS = {N_("as fast as possible"): 0.0, N_("real time"): 1.0,
                  N_("4x"): 4.0, N_("10x"): 10.0}
 
 STRICTNESS_LEVELS = (N_("lenient"), N_("normal"), N_("strict"))
+
+#: Where the sky peak should land on the histogram: at a third of the width.
+#: Anchoring on the sky rather than on a percentile is what makes the scale
+#: immune to hot pixels, however many there are — a median does not move.
+HISTOGRAM_SKY_SPAN = 3.0
+
+#: …but the bright tail must still fit when it reaches past that. A tenth of a
+#: percent is a population, not an outlier.
+HISTOGRAM_TAIL_PERCENTILE = 99.9
+
+#: Fraction of the frame at the top of the scale before the histogram widens to
+#: show the saturation wall. 0.05% is ~70 pixels of a sampled bin2 frame: more
+#: than a few hot pixels, less than a blown target.
+SATURATED_FRACTION = 0.0005
+
+#: Below this the realign arrow reports "on target" rather than a direction —
+#: on the order of the rms register.estimate() already accepts (max_rms=2.0).
+REALIGN_ON_TARGET_PX = 6.0
 
 
 class _WheelGuard(QObject):
@@ -173,6 +214,85 @@ class _WheelGuard(QObject):
         return True
 
 
+class RealignArrow(pg.GraphicsObject):
+    """Points at the target's current on-screen position, for manual recentring.
+
+    Added straight to the image ViewBox in sensor-pixel space (`self.vb`,
+    the same space `self.img` lives in), so it follows pan and zoom for free
+    instead of needing its own screen<->sensor conversion. The triangle
+    geometry mirrors SkyMap._edge_arrow (ui/skymap.py): a shape built from
+    cos/sin around an angle, already proven legible in both themes.
+
+    Length and head size scale with the frame's own half-extent rather than a
+    fixed pixel count, since the sensor resolution changes with bin.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._center = QPointF(0, 0)
+        self._tip = QPointF(0, 0)
+        self._head = QPolygonF()
+        self._color = QColor("#ffffff")
+        self._label = ""
+        self._pointing = False
+        self._rect = QRectF()
+
+    def set_info(self, cx: float, cy: float, dx: float, dy: float, *,
+                 ok: bool, on_target: bool, color: str, label: str) -> None:
+        self.prepareGeometryChange()
+        self._center = QPointF(cx, cy)
+        self._color = QColor(color)
+        self._label = label
+        self._pointing = ok and not on_target
+        half = max(min(cx, cy), 1.0)
+        if self._pointing:
+            dist = float(np.hypot(dx, dy))
+            r = min(dist, half * 0.85)
+            ang = float(np.arctan2(dy, dx))
+            tx, ty = cx + r * np.cos(ang), cy + r * np.sin(ang)
+            self._tip = QPointF(tx, ty)
+            head = max(half * 0.045, 6.0)
+            self._head = QPolygonF([
+                QPointF(tx + head * np.cos(ang), ty + head * np.sin(ang)),
+                QPointF(tx + head * 0.6 * np.cos(ang + 2.5),
+                        ty + head * 0.6 * np.sin(ang + 2.5)),
+                QPointF(tx + head * 0.6 * np.cos(ang - 2.5),
+                        ty + head * 0.6 * np.sin(ang - 2.5)),
+            ])
+            pad = head + 4
+            xs = (cx, tx)
+            ys = (cy, ty)
+        else:
+            self._tip = self._center
+            self._head = QPolygonF()
+            r = max(half * 0.02, 5.0)
+            pad = r + 4
+            xs = (cx - r, cx + r)
+            ys = (cy - r, cy + r)
+        self._rect = QRectF(min(xs) - pad, min(ys) - pad,
+                            max(xs) - min(xs) + 2 * pad,
+                            max(ys) - min(ys) + 2 * pad)
+        self.update()
+
+    def boundingRect(self) -> QRectF:
+        return self._rect
+
+    def paint(self, p: QPainter, _opt, _widget=None) -> None:
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(QPen(self._color, 2))
+        if self._pointing:
+            p.drawLine(self._center, self._tip)
+            p.setBrush(self._color)
+            p.drawPolygon(self._head)
+        else:
+            p.setBrush(Qt.NoBrush)
+            r = max(min(self._center.x(), self._center.y()) * 0.02, 5.0)
+            p.drawEllipse(self._center, r, r)
+        if self._label:
+            p.setBrush(Qt.NoBrush)
+            p.drawText(self._tip + QPointF(10, -10), self._label)
+
+
 class MainWindow(QMainWindow):
     #: Emitted when the user picks another language; `main()` rebuilds the window.
     language_changed = Signal(str)
@@ -200,14 +320,19 @@ class MainWindow(QMainWindow):
         self._hist = FrameHistory()
         self._revisit: dict | None = None
         self._black = 0.0
+        self._bias_path = None
         self._dark_path = None
         self._flat_path = None
-        self._prep = None
-        self._prep_key = None
-        self._prep_src = None
         self._replay_folder = ""
         self._target = None
         self._catalog: Catalog | None = None
+        # Alignment procedure: the stations measured so far, the run in
+        # progress as the worker last reported it, and the last solution.
+        self._align_stations: list[platform_align.Station] = []
+        self._align_status: dict | None = None
+        self._align_suggestion = None
+        self._align_result: platform_align.AlignResult | None = None
+        self._align_check: str = ""
         self._cat_missing = False
         # The phone sensor answers "where does the tube point" in this mode.
         self.point = Pointing(self.settings.latitude, self.settings.longitude,
@@ -246,6 +371,12 @@ class MainWindow(QMainWindow):
         self._paused = False
         self._cool: dict = {}
         self._state = "idle"
+        # The Moon, recomputed on a timer: it is the one target that moves fast
+        # enough to matter — half a degree an hour, its own diameter.
+        self._body_state = None
+        self._body_t = 0.0
+        self._body_track = 0.0
+        self._body_target = False
         self._t_frame = 0.0
         self._exposure = self.settings.exposure_s
         self._last_stats: dict = {}
@@ -285,6 +416,7 @@ class MainWindow(QMainWindow):
         outer.setContentsMargins(8, 8, 8, 6)
         outer.setSpacing(8)
 
+        outer.addWidget(self._top_bar())
         outer.addWidget(self._status_bar())
         self.alert = QLabel("")
         self.alert.setFont(T_H2())
@@ -310,6 +442,63 @@ class MainWindow(QMainWindow):
         # nobody remembers to press L before needing it.
         self.btn_log.setChecked(True)
         self.setCentralWidget(root)
+        self.config_window = self._build_config_window()
+        self.align_window = self._build_align_window()
+
+    # ---------------------------------------------------------------- top bar
+    def _top_bar(self) -> QWidget:
+        """What applies to the whole program rather than to a phase of the
+        night: the display toggles and the configuration.
+
+        It stays on screen in "image only", unlike everything else: it is where
+        the toggle that got you there lives.
+        """
+        bar = QWidget()
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(4, 0, 2, 0)
+        h.setSpacing(4)
+
+        name = QLabel(APP_NAME.upper())
+        name.setObjectName("sectionTitle")
+        name.setFont(label_font())
+        version = QLabel(__version__)
+        version.setObjectName("statLabel")
+        version.setFont(T_SMALL())
+        h.addWidget(name)
+        h.addWidget(version)
+        h.addStretch(1)
+
+        self.btn_night = self._top_toggle(
+            _("night mode   (N)"), "moon", self.toggle_night)
+        self.btn_full = self._top_toggle(
+            _("image only   (F)"), "expand", self.toggle_full)
+        # Deferred lookup: the log is created after the bar.
+        self.btn_log = self._top_toggle(
+            _("log   (L)"), "list", lambda on: self.log.setVisible(on))
+        for b in (self.btn_night, self.btn_full, self.btn_log):
+            h.addWidget(b)
+
+        self.btn_config = QPushButton(_("config"))
+        self.btn_config.setObjectName("ghost")
+        self._ic(self.btn_config, "adjust")
+        self.btn_config.setAutoDefault(False)
+        self.btn_config.setToolTip(_(
+            "folders, observing site, optics and language, in a window of its "
+            "own   ({key})").format(
+                key=QKeySequence(CONFIG_SHORTCUT).toString(
+                    QKeySequence.NativeText)))
+        self.btn_config.clicked.connect(self.open_config)
+        h.addWidget(self.btn_config)
+        return bar
+
+    def _top_toggle(self, label: str, icon: str, slot) -> QPushButton:
+        b = QPushButton(label)
+        b.setObjectName("ghost")
+        b.setCheckable(True)
+        b.setAutoDefault(False)
+        self._ic(b, icon)
+        b.toggled.connect(slot)
+        return b
 
     # ------------------------------------------------------------- status bar
     def _status_bar(self) -> QWidget:
@@ -445,7 +634,7 @@ class MainWindow(QMainWindow):
         for key, build in (("frame", self._panel_frame),
                            ("targets", self._panel_targets),
                            ("stack", self._panel_stack),
-                           ("config", self._panel_config)):
+                           ("lucky", self._panel_lucky)):
             sa = QScrollArea()
             sa.setWidget(build())
             sa.setWidgetResizable(True)
@@ -467,8 +656,10 @@ class MainWindow(QMainWindow):
         r1 = QHBoxLayout()
         r1.setSpacing(6)
         self.sp_exp = QDoubleSpinBox()
-        self.sp_exp.setRange(0.001, 600.0)
-        self.sp_exp.setDecimals(3)
+        # Four decimals, not three: a lunar exposure is around 8 ms, where the
+        # third decimal is a 12% step and the exposure suggestion cannot land.
+        self.sp_exp.setRange(0.0001, 600.0)
+        self.sp_exp.setDecimals(4)
         self.sp_exp.setValue(self.settings.exposure_s)
         self.sp_exp.setSuffix(" s")
         self.sp_exp.valueChanged.connect(self._exposure_changed)
@@ -570,8 +761,11 @@ class MainWindow(QMainWindow):
         self.lbl_sensor.setFont(T_MONO())
         self.lbl_sensor.setWordWrap(True)
         c.add(self.lbl_sensor)
-        self.lbl_altaz = QLabel("—")
+        # Without a reading there is nothing to show: a lone dash under "off"
+        # reads as a broken field, so the row is absent until the sensor talks.
+        self.lbl_altaz = QLabel("")
         self.lbl_altaz.setFont(T_L())
+        self.lbl_altaz.setVisible(False)
         c.add(self.lbl_altaz)
         # Which star to align on is a question with a computable answer, and
         # hunting one in a list of 179 names in the dark is what makes people
@@ -827,7 +1021,6 @@ class MainWindow(QMainWindow):
         # which are set once and cost a single scroll at the start of a session.
         v.addWidget(self._card_stretch())
         v.addWidget(self._card_channel_gain())
-        v.addWidget(self._card_gradient())
 
         c = Card(_("stacking"))
         self.chk_weight = QCheckBox(_("give better frames more weight"))
@@ -866,6 +1059,16 @@ class MainWindow(QMainWindow):
             "is re-extracted."))
         self.btn_segment.clicked.connect(lambda: self._flag("new_segment"))
         c.add(self.btn_segment)
+        self.btn_realign = QPushButton(_("Pause & realign   (R)"))
+        self.btn_realign.setCheckable(True)
+        self._ic(self.btn_realign, "target")
+        self.btn_realign.setToolTip(_(
+            "Pauses accumulation without losing the stack, and draws an arrow "
+            "over the image at the target's current position. Nudge the tube "
+            "until it disappears, then resume: a new segment starts on its "
+            "own, with relaxed thresholds and a fresh reference."))
+        self.btn_realign.toggled.connect(self._realign_toggled)
+        c.add(self.btn_realign)
         v.addWidget(c)
 
         c = Card(_("target and recording"))
@@ -894,9 +1097,31 @@ class MainWindow(QMainWindow):
         v.addWidget(c)
 
         # Two cards, not one called "stack": calibration is what you load from
-        # outside (dark, flat) and set once a night; stacking is how frames
-        # enter the accumulator, and is adjusted during the session.
+        # outside (bias, dark, flat) and set once a night; stacking is how
+        # frames enter the accumulator, and is adjusted during the session.
         c = Card(_("calibration"))
+        row = QHBoxLayout()
+        self.btn_bias = QPushButton(_("Load bias"))
+        self._ic(self.btn_bias, "bias")
+        self.btn_bias.setToolTip(_(
+            "The offset pedestal, at the shortest exposure the camera does.\n"
+            "Applied only when no dark is loaded — a dark already contains it —\n"
+            "and it is what a flat has to have subtracted."))
+        self.btn_bias.clicked.connect(self.pick_bias)
+        self.btn_capture_bias = QPushButton(_("Record bias"))
+        self._ic(self.btn_capture_bias, "bias")
+        self.btn_capture_bias.setToolTip(_(
+            "Records a master bias with the gain, offset and bin of the session\n"
+            "in progress. The exposure drops to the camera's minimum for the\n"
+            "recording and goes back afterwards. Cap the sensor first."))
+        self.btn_capture_bias.clicked.connect(self.capture_bias)
+        row.addWidget(self.btn_bias)
+        row.addWidget(self.btn_capture_bias)
+        c.add_layout(row)
+        self.lbl_bias = QLabel(_("{kind}: none").format(kind="bias"))
+        self.lbl_bias.setFont(T_MONO())
+        self.lbl_bias.setWordWrap(True)
+        c.add(self.lbl_bias)
         row = QHBoxLayout()
         self.btn_dark = QPushButton(_("Load dark"))
         self._ic(self.btn_dark, "dark")
@@ -911,7 +1136,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self.btn_dark)
         row.addWidget(self.btn_capture_dark)
         c.add_layout(row)
-        self.lbl_dark = QLabel(_("dark: none"))
+        self.lbl_dark = QLabel(_("{kind}: none").format(kind="dark"))
         self.lbl_dark.setFont(T_MONO())
         self.lbl_dark.setWordWrap(True)
         c.add(self.lbl_dark)
@@ -928,15 +1153,20 @@ class MainWindow(QMainWindow):
             "Records a master flat with the gain and bin of the session in\n"
             "progress. Point at an evenly illuminated surface — twilight sky, a\n"
             "flat panel, a stretched white shirt — and set the exposure so the\n"
-            "histogram lands near half scale."))
+            "histogram lands near half scale. The bias, or a dark of this same\n"
+            "exposure, is subtracted from it."))
         self.btn_capture_flat.clicked.connect(self.capture_flat)
         row.addWidget(self.btn_flat)
         row.addWidget(self.btn_capture_flat)
         c.add_layout(row)
-        self.lbl_flat = QLabel(_("flat: none"))
+        self.lbl_flat = QLabel(_("{kind}: none").format(kind="flat"))
         self.lbl_flat.setFont(T_MONO())
         self.lbl_flat.setWordWrap(True)
         c.add(self.lbl_flat)
+        # One label per kind, keyed the way the worker's `calibration` signal
+        # names them.
+        self._calib_labels = {"bias": self.lbl_bias, "dark": self.lbl_dark,
+                              "flat": self.lbl_flat}
         v.addWidget(c)
 
         c = Card(_("equatorial platform"))
@@ -944,6 +1174,15 @@ class MainWindow(QMainWindow):
         self.lbl_advice.setWordWrap(True)
         self.lbl_advice.setFont(T_MONO())
         c.add(self.lbl_advice)
+        b = QPushButton(_("check the alignment…"))
+        self._ic(b, "target")
+        b.setToolTip(_(
+            "Measures the polar alignment from the field rotation itself and\n"
+            "says which way to move the platform. It opens in a window of its\n"
+            "own: the procedure needs FRAME to point the tube, and the\n"
+            "measurement carries on while you do."))
+        b.clicked.connect(self.open_align)
+        c.add(b)
         v.addWidget(c)
         v.addStretch(1)
         return w
@@ -1029,48 +1268,663 @@ class MainWindow(QMainWindow):
                       "unlinked, each channel is already normalised on its own")))
         return c
 
-    def _card_gradient(self) -> Card:
-        c = Card(_("background gradient"))
-        self.chk_bg = QCheckBox(_("remove gradient"))
-        self.chk_bg.setToolTip(_(
-            "Fits a smooth surface to the background and subtracts it. Corrects\n"
-            "light pollution and the residual amp glow left over from the dark —\n"
-            "which is exactly what the autostretch amplifies best.\n"
-            "Affects the display only; the accumulator is not modified."))
-        self.chk_bg.toggled.connect(lambda: self._render(True))
-        c.add(self.chk_bg)
-        row = QHBoxLayout()
-        self.sp_bg_deg = QSpinBox()
-        self.sp_bg_deg.setRange(1, 2)
-        self.sp_bg_deg.setValue(2)
-        self.sp_bg_deg.setToolTip(_(
-            "1 corrects tilt; 2 catches amp glow, which is a corner blob.\n"
-            "A higher degree starts eating extended nebulosity."))
-        self.sp_bg_deg.valueChanged.connect(lambda: self._render(True))
-        row.addWidget(QLabel(_("degree")))
-        row.addWidget(self.sp_bg_deg)
-        self.lbl_bg = QLabel("")
-        self.lbl_bg.setFont(T_MONO())
-        row.addWidget(self.lbl_bg, 1)
-        c.add_layout(row)
-        return c
+    # -------------------------------------------- panel: PLANETS
+    def _panel_lucky(self) -> QWidget:
+        """The Moon and the planets, which share almost nothing with the rest of
+        the program.
 
-    # -------------------------------------------------------- panel: CONFIG
-    def _panel_config(self) -> QWidget:
-        """What you set once — where files go, where you are, what optics, which
-        language — as opposed to what you touch all night.
+        Nothing here stacks, and nothing here measures a star. Such a session is
+        three decisions in this order: point at the body — these are the targets
+        no catalogue carries — expose so the disc does not clip, and record a
+        burst to pick the sharp frames from afterwards. The panel is those
+        three, in that order.
 
-        Deliberately short: no scrolling, so nothing falls below the fold.
+        The Moon and Jupiter differ in one number and not in kind: how much of
+        the frame the body is. Everything downstream of the choice — the
+        exposure, the measuring window, the stack — follows from that, so the
+        choice is one combo at the top rather than a second panel.
         """
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(8)
+
+        c = Card(_("the body right now"))
+        self.cb_body = QComboBox()
+        for key, body in lucky.BODIES.items():
+            self.cb_body.addItem(body.label, key)
+        i = self.cb_body.findData(self.settings.lucky_body)
+        self.cb_body.setCurrentIndex(max(i, 0))
+        self.cb_body.currentIndexChanged.connect(self._body_changed)
+        c.field(_("body"), self.cb_body,
+                _("the Sun is deliberately absent: nothing here can know "
+                  "whether there is a filter on the tube"))
+        self.lbl_body = QLabel(_("computing…"))
+        self.lbl_body.setFont(T_BODY())
+        self.lbl_body.setWordWrap(True)
+        c.add(self.lbl_body)
+        self.lbl_body_fit = QLabel("")
+        self.lbl_body_fit.setFont(T_MONO())
+        self.lbl_body_fit.setWordWrap(True)
+        c.add(self.lbl_body_fit)
+        self.btn_body_point = QPushButton(_("Point at it"))
+        self._ic(self.btn_body_point, "moon")
+        self.btn_body_point.setToolTip(_(
+            "Makes this body the target and opens FRAME, where the arrow says\n"
+            "which way to push. Its position is recomputed every minute: the\n"
+            "Moon moves half a degree an hour against the stars, which is its\n"
+            "own diameter."))
+        self.btn_body_point.clicked.connect(self._body_point)
+        c.add(self.btn_body_point)
+        v.addWidget(c)
+
+        c = Card(_("exposure"))
+        self.lbl_body_exp = QLabel(_("start the capture"))
+        self.lbl_body_exp.setFont(T_BODY())
+        self.lbl_body_exp.setWordWrap(True)
+        self.lbl_body_exp.setToolTip(_(
+            "Measured on the raw mosaic, before demosaicing: saturation happens\n"
+            "per photosite, and mixing three colours together hides the channel\n"
+            "that went over. A clipped highlight is gone — no amount of stacking\n"
+            "afterwards brings a crater floor back."))
+        c.add(self.lbl_body_exp)
+        row = QHBoxLayout()
+        self.btn_body_preset = QPushButton(_("Defaults for this body"))
+        self.btn_body_preset.setToolTip(_(
+            "Milliseconds, low gain, bin1 — none of the deep-sky settings\n"
+            "survive a target eight magnitudes brighter than everything else.\n"
+            "Scaled off the Moon's exposure by the ratio of surface\n"
+            "brightnesses, and capped where a longer frame would average the\n"
+            "seeing instead of freezing it. A starting point, not an answer:\n"
+            "finish with the suggestion above."))
+        self.btn_body_preset.clicked.connect(self._body_preset)
+        self.btn_body_apply = QPushButton(_("Apply the suggestion"))
+        self.btn_body_apply.setToolTip(_(
+            "Scales the exposure so the brightest photosite lands just below\n"
+            "saturation. Takes two or three goes once it is clipping: a clipped\n"
+            "frame no longer records how far over it went."))
+        self.btn_body_apply.clicked.connect(self._apply_suggested_exposure)
+        row.addWidget(self.btn_body_preset)
+        row.addWidget(self.btn_body_apply)
+        c.add_layout(row)
+        v.addWidget(c)
+
+        c = Card(_("burst"))
+        self.btn_burst = QPushButton(_("Record burst   (R)"))
+        self.btn_burst.setCheckable(True)
+        self.btn_burst.setMinimumHeight(38)
+        self._ic(self.btn_burst, "play")
+        self.btn_burst.setToolTip(_(
+            "Writes every frame to its own session folder until the limit below,\n"
+            "and stops on its own. This is what replaces integration here: the\n"
+            "sharpest few percent are stacked later, in a program built for it.\n"
+            "Each frame carries its measured sharpness in the FITS header, so\n"
+            "picking them does not mean measuring everything again."))
+        self.btn_burst.toggled.connect(self._burst_toggled)
+        c.add(self.btn_burst)
+        self.prog_burst = QProgressBar()
+        self.prog_burst.setTextVisible(False)
+        self.prog_burst.setFixedHeight(10)
+        c.add(self.prog_burst)
+        self.sp_burst_sec = QDoubleSpinBox()
+        self.sp_burst_sec.setRange(0.0, 600.0)
+        self.sp_burst_sec.setDecimals(0)
+        self.sp_burst_sec.setValue(self.settings.lucky_burst_seconds)
+        self.sp_burst_sec.setSuffix(" s")
+        self.sp_burst_sec.valueChanged.connect(
+            lambda x: self._req(burst_seconds=x))
+        c.field(_("length"), self.sp_burst_sec,
+                _("0 removes the time limit — then only the frame count stops it"))
+        self.sp_burst_frames = QSpinBox()
+        self.sp_burst_frames.setRange(0, 20000)
+        self.sp_burst_frames.setValue(self.settings.lucky_burst_frames)
+        self.sp_burst_frames.valueChanged.connect(
+            lambda x: self._req(burst_frames=x))
+        c.field(_("frames"), self.sp_burst_frames,
+                _("0 removes the frame limit. Whichever limit comes first ends "
+                  "the burst"))
+        self.chk_burst_rice = QCheckBox(_("compress the burst (RICE)"))
+        self.chk_burst_rice.setChecked(self.settings.lucky_burst_compress)
+        self.chk_burst_rice.setToolTip(_(
+            "Off by default, unlike a deep-sky session. Measured at bin1 it\n"
+            "costs 119 ms a frame against 32 ms, which caps the burst at 8 fps\n"
+            "instead of 31, and saves 40% of the space. Lucky imaging is bought\n"
+            "in frames, so the trade normally goes the other way here — turn it\n"
+            "on for long exposures, where the frame rate is not the limit."))
+        c.add(self.chk_burst_rice)
+        self.lbl_burst = QLabel("")
+        self.lbl_burst.setFont(T_MONO())
+        self.lbl_burst.setWordWrap(True)
+        self.lbl_burst.setVisible(False)
+        c.add(self.lbl_burst)
+        v.addWidget(c)
+
+        c = Card(_("view"))
+        c.add(_hint(_("linear, not autostretched: there is no faint signal to "
+                      "lift here, and a stretch built for a nebula flattens the "
+                      "maria into grey")))
+        self.chk_follow = QCheckBox(_("keep the body centred"))
+        self.chk_follow.setChecked(self.settings.lucky_follow)
+        self.chk_follow.setToolTip(_(
+            "At the magnification a planet needs, wind and seeing walk it\n"
+            "across the screen — and judging focus on something that will not\n"
+            "stay still is guesswork. This keeps the view on the body instead\n"
+            "of on the sensor: the image does not move, the window onto it\n"
+            "does.\n\n"
+            "Display only. The recorded frames are untouched, and the stack\n"
+            "aligns them afterwards on its own."))
+        self.chk_follow.toggled.connect(self._follow_toggled)
+        c.add(self.chk_follow)
+        self.sl_lucky_white, wwh = self._slider(
+            _("white point"), *LUCKY_WHITE, 100, 100.0)
+        self.sl_lucky_white.setToolTip(_(
+            "Which fraction of full scale comes out white. A gibbous Moon at a "
+            "safe exposure only reaches half the range, and at 1.00 it is a grey "
+            "disc on screen while the data underneath is fine."))
+        c.add(wwh)
+        self.btn_view_white = QPushButton(_("Fit to this frame"))
+        self.btn_view_white.setToolTip(_(
+            "Sets the white point from the brightest part of the current frame."))
+        self.btn_view_white.clicked.connect(self._lucky_fit_white)
+        c.add(self.btn_view_white)
+        self.sl_lucky_gamma, wga = self._slider(
+            _("gamma"), *LUCKY_GAMMA,
+            int(round(self.settings.lucky_gamma * 100)), 100.0)
+        self.sl_lucky_gamma.setToolTip(_(
+            "Below 1.00 opens up the maria and the terminator without touching "
+            "the highlights. It is display only — the recorded frames are raw."))
+        c.add(wga)
+        v.addWidget(c)
+
+        v.addWidget(self._card_lucky_colour())
+        v.addStretch(1)
+        return w
+
+    def _card_lucky_colour(self) -> Card:
+        """Colour for this view, separate from the deep-sky balance.
+
+        These targets need their own set for two reasons. The Moon is the one
+        object in the sky where the white balance can be *measured* rather than
+        guessed — the surface really is grey, which is why its colour
+        differences only show under a saturation boost — and the deep-sky
+        sliders live in INTEGRATE, which means reaching them would mean leaving
+        the frame you are balancing.
+
+        The measuring is the Moon's alone. Mars is red and Jupiter is tan;
+        matching their channel medians would be correcting the sensor for a
+        colour the planet actually has, so the button is only offered there.
+        """
+        c = Card(_("colour"))
+        self.sl_lucky_r, wr = self._slider(_("red"), 30, 300, 100, 100.0)
+        self.sl_lucky_b, wb = self._slider(_("blue"), 30, 300, 100, 100.0)
+        for sl, value in ((self.sl_lucky_r, self.settings.lucky_wb_red),
+                          (self.sl_lucky_b, self.settings.lucky_wb_blue)):
+            sl.setValue(int(round(value * 100)))
+            sl.setToolTip(_(
+                "Green stays at 1.00: on a Bayer sensor it has twice the "
+                "photosites and is the least noisy of the three, so it is the "
+                "one worth measuring the other two against."))
+        c.add(wr)
+        c.add(wb)
+        row = QHBoxLayout()
+        self.btn_body_balance = QPushButton(_("Balance on the disc"))
+        self.btn_body_balance.setToolTip(_(
+            "Matches the three channel medians over the lit disc. Measured on "
+            "the disc and not on the frame: the frame is mostly black sky, whose "
+            "median says nothing about colour.\n\n"
+            "The Moon only. Grey-world is a measurement there and an error "
+            "anywhere else — Mars is red, and neutralising it would be "
+            "correcting the camera for the planet."))
+        self.btn_body_balance.clicked.connect(self._lucky_balance)
+        self.btn_body_neutral = QPushButton(_("neutral"))
+        self.btn_body_neutral.setToolTip(_("returns both gains to 1.00"))
+        self.btn_body_neutral.clicked.connect(
+            lambda: [sl.setValue(100)
+                     for sl in (self.sl_lucky_r, self.sl_lucky_b)])
+        row.addWidget(self.btn_body_balance, 1)
+        row.addWidget(self.btn_body_neutral)
+        c.add_layout(row)
+        self.sl_lucky_sat, wsa = self._slider(_("saturation"), 0, 40, 10, 10.0)
+        self.sl_lucky_sat.setValue(
+            int(round(self.settings.lucky_saturation * 10)))
+        self.sl_lucky_sat.setToolTip(_(
+            "The mineral Moon lives at 2-3: the colour is real — titanium in "
+            "the blue maria, iron oxide in the orange ones — and only a few "
+            "percent apart, so it takes amplifying to be seen at all."))
+        c.add(wsa)
+        c.add(_hint(_("display only, like everything on this panel: the frames "
+                      "the burst writes are raw")))
+        self._sync_body_widgets()
+        return c
+
+    def _ctx_lucky(self) -> QWidget:
+        """Histogram, ephemeris and frame quality — the equivalents here.
+
+        The histogram is here and not only in INTEGRATE because on a bright body
+        it is the exposure meter: the right side of it touching the wall is the
+        whole failure mode of such a session.
+        """
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+
+        c = Card(_("histogram"))
+        self.hist3 = pg.PlotWidget()
+        self.hist3.setLogMode(False, True)
+        self.hist3_rgb = [self.hist3.plot() for _ in range(3)]
+        self.hist3_black = pg.InfiniteLine(angle=90)
+        self.hist3.addItem(self.hist3_black)
+        self.hist3_white = pg.InfiniteLine(angle=90)
+        self.hist3.addItem(self.hist3_white)
+        c.add(self.hist3, 1)
+        h.addWidget(c, 1)
+
+        c = Card(_("this frame"))
+        grid = QWidget()
+        g = QVBoxLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(1)
+        self.st_peak = Stat(_("peak"), "—", min_width=150)
+        self.st_clipped = Stat(_("clipped"), "—", min_width=150)
+        self.st_sharp = Stat(_("sharpness"), "—", min_width=150)
+        # Where the other three were measured. Without it they are three numbers
+        # about an unnamed part of the frame, and a window that has lost the
+        # body reads as an exposure that suddenly collapsed.
+        self.st_window = Stat(_("window"), "—", min_width=150)
+        for st in (self.st_peak, self.st_clipped, self.st_sharp,
+                   self.st_window):
+            g.addWidget(st)
+        c.add(grid)
+        c.setMaximumWidth(210)
+        h.addWidget(c)
+
+        c = Card(_("this body"))
+        grid = QWidget()
+        g = QVBoxLayout(grid)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setSpacing(1)
+        self.st_body_phase = Stat(_("phase"), "—", min_width=200)
+        self.st_body_alt = Stat(_("altitude"), "—", min_width=200)
+        self.st_body_size = Stat(_("disc"), "—", min_width=200)
+        for st in (self.st_body_phase, self.st_body_alt, self.st_body_size):
+            g.addWidget(st)
+        c.add(grid)
+        c.setMaximumWidth(250)
+        h.addWidget(c)
+        return w
+
+    # ------------------------------------------------------- window: CONFIG
+    def _build_config_window(self) -> QDialog:
+        """What you set once — where files go, where you are, what optics, which
+        language — as opposed to what you touch all night. A window and not a
+        mode; `docs/design-notes.md` has the why.
+
+        Built with the main window and kept: `_restore` and `closeEvent` read
+        these widgets whether it has ever been shown or not.
+        """
+        d = QDialog(self)
+        # Plain QWidget is transparent on purpose (see design.stylesheet), so
+        # the window background has to be asked for by name.
+        d.setObjectName("root")
+        d.setWindowTitle(_("Astrodoro — configuration"))
+        v = QVBoxLayout(d)
+        v.setContentsMargins(10, 10, 10, 10)
+        v.setSpacing(8)
         v.addWidget(self._card_folders())
         v.addWidget(self._card_site())
         v.addWidget(self._card_display())
         v.addStretch(1)
-        return w
+        close = QPushButton(_("close"))
+        close.setAutoDefault(False)
+        close.clicked.connect(d.close)
+        v.addWidget(close)
+        d.setMinimumWidth(408)
+        d.finished.connect(self._store_config)
+        return d
+
+    def open_config(self) -> None:
+        d = self.config_window
+        d.show()
+        d.raise_()
+        d.activateWindow()
+
+    # ====================================================== platform alignment
+    def _build_align_window(self) -> QDialog:
+        """The alignment procedure, one station at a time.
+
+        A window and not a mode, and for a second reason on top of the
+        configuration's: the procedure sends you back to FRAME to point the
+        tube at the next field, and keeps measuring while you do. A mode would
+        have to be left to do that, taking its own readout with it.
+        """
+        d = QDialog(self)
+        d.setObjectName("root")
+        d.setWindowTitle(_("Astrodoro — platform alignment"))
+        v = QVBoxLayout(d)
+        v.setContentsMargins(10, 10, 10, 10)
+        v.setSpacing(8)
+
+        c = Card(_("what to do now"))
+        self.lbl_align_step = QLabel()
+        self.lbl_align_step.setWordWrap(True)
+        self.lbl_align_step.setFont(T_BODY())
+        c.add(self.lbl_align_step)
+        v.addWidget(c)
+
+        c = Card(_("this field"))
+        self.lbl_align_target = QLabel("—")
+        self.lbl_align_target.setWordWrap(True)
+        self.lbl_align_target.setFont(T_MONO())
+        c.add(self.lbl_align_target)
+        self.sp_align_min = QDoubleSpinBox()
+        self.sp_align_min.setRange(2.0, 30.0)
+        self.sp_align_min.setDecimals(1)
+        self.sp_align_min.setSingleStep(0.5)
+        self.sp_align_min.setValue(self.settings.align_minutes)
+        self.sp_align_min.setSuffix(_(" min"))
+        c.field(_("duration"), self.sp_align_min, _(
+            "How long each field is measured for. What is being measured is\n"
+            "thousandths of a degree per minute, and precision comes from the\n"
+            "baseline: twice the time is twice as good, twice the frames only\n"
+            "√2. Five minutes resolves an error of about a quarter of a degree."))
+        self.pb_align = QProgressBar()
+        self.pb_align.setRange(0, 100)
+        self.pb_align.setTextVisible(False)
+        c.add(self.pb_align)
+        self.lbl_align_live = ElidedLabel("—")
+        self.lbl_align_live.setFont(T_MONO())
+        c.add(self.lbl_align_live)
+        row = QHBoxLayout()
+        self.btn_align_measure = QPushButton(_("measure this field"))
+        self.btn_align_measure.setCheckable(True)
+        self.btn_align_measure.toggled.connect(self._align_measure)
+        self.btn_align_keep = QPushButton(_("keep"))
+        self.btn_align_keep.setEnabled(False)
+        self.btn_align_keep.clicked.connect(self._align_keep)
+        row.addWidget(self.btn_align_measure, 1)
+        row.addWidget(self.btn_align_keep)
+        c.add_layout(row)
+        v.addWidget(c)
+
+        c = Card(_("fields measured"))
+        self.lbl_align_stations = QLabel(_("none yet"))
+        self.lbl_align_stations.setWordWrap(True)
+        self.lbl_align_stations.setFont(T_MONO())
+        c.add(self.lbl_align_stations)
+        self.lbl_align_next = QLabel("—")
+        self.lbl_align_next.setWordWrap(True)
+        self.lbl_align_next.setFont(T_MONO())
+        c.add(self.lbl_align_next)
+        row = QHBoxLayout()
+        self.btn_align_adopt = QPushButton(_("point at it"))
+        self.btn_align_adopt.setEnabled(False)
+        self.btn_align_adopt.clicked.connect(self._align_adopt)
+        self.btn_align_clear = QPushButton(_("start over"))
+        self.btn_align_clear.clicked.connect(self._align_clear)
+        row.addWidget(self.btn_align_adopt, 1)
+        row.addWidget(self.btn_align_clear)
+        c.add_layout(row)
+        v.addWidget(c)
+
+        c = Card(_("correction"))
+        self.lbl_align_result = QLabel("—")
+        self.lbl_align_result.setWordWrap(True)
+        self.lbl_align_result.setFont(T_MONO())
+        c.add(self.lbl_align_result)
+        self.btn_align_parity = QPushButton(_("invert the image parity"))
+        self.btn_align_parity.setToolTip(_(
+            "The rotation is measured on the sensor, and whether its sign\n"
+            "agrees with the sky depends on how many mirrors the light bounced\n"
+            "off. If the residual rotation grew after you applied a correction,\n"
+            "the sign is the wrong way round for this telescope: invert it here\n"
+            "and it stays inverted for good."))
+        self.btn_align_parity.clicked.connect(self._align_flip_parity)
+        c.add(self.btn_align_parity)
+        v.addWidget(c)
+
+        v.addStretch(1)
+        close = QPushButton(_("close"))
+        close.setAutoDefault(False)
+        close.clicked.connect(d.close)
+        v.addWidget(close)
+        d.setMinimumWidth(420)
+        d.finished.connect(self._align_closed)
+        # Not filled in here: the suggestion costs an astropy call, and the
+        # first one of the process costs half a second — paid inside the main
+        # window's constructor for a window nobody has opened yet.
+        return d
+
+    def open_align(self) -> None:
+        d = self.align_window
+        d.show()
+        d.raise_()
+        d.activateWindow()
+        self._refresh_align()
+
+    def _align_closed(self, _result: int = 0) -> None:
+        """Closing the window stops the measurement.
+
+        A run that carries on with nothing on screen to show it would keep
+        rejecting frames, or keep succeeding, with no way to tell.
+        """
+        self.btn_align_measure.setChecked(False)
+        self.settings.align_minutes = self.sp_align_min.value()
+        try:
+            self.settings.save()
+        except OSError:
+            pass
+
+    # ------------------------------------------------------------ the steps
+    def _align_measure(self, on: bool) -> None:
+        self.btn_align_measure.setText(_("stop") if on
+                                       else _("measure this field"))
+        if not on:
+            self._req(align=None)
+            self._align_status = None
+            self.pb_align.setValue(0)
+            self._refresh_align()
+            return
+        if self.worker is None:
+            self.on_log(_("start the capture before measuring the alignment"))
+            self.btn_align_measure.setChecked(False)
+            return
+        pos = self._align_field()
+        if pos is None:
+            self.on_log(_("choose a target first: the correction needs to know "
+                          "where the tube is pointing"))
+            self.btn_align_measure.setChecked(False)
+            return
+        ra, dec, name = pos
+        self._req(align={"ra": ra, "dec": dec, "name": name,
+                         "min_span_s": self.sp_align_min.value() * 60.0})
+        self._refresh_align()
+
+    def _align_field(self) -> tuple[float, float, str] | None:
+        """Where the tube is pointing, as far as the program knows.
+
+        The chosen target if there is one — it is what the tube was put on.
+        Failing that the phone, which knows where the tube points without
+        anyone having named it.
+        """
+        if self._target is not None:
+            return (self._target.ra, self._target.dec,
+                    self._target.label.split(" (")[0])
+        radec = self.point.radec if self.point else None
+        if radec is not None:
+            return radec[0], radec[1], _("where the tube points")
+        return None
+
+    def _align_keep(self) -> None:
+        st = self._align_status
+        if not st:
+            return
+        when = datetime.fromtimestamp(st["middle"], tz=UTC)
+        station = platform_align.station_from(
+            st, tonight.lst_at(self.sp_lon.value(), when))
+        if station is None:
+            return
+        # Measuring the same field again is a check, not a second equation:
+        # it replaces the old station and says whether the correction worked.
+        same = [s for s in self._align_stations
+                if angular_sep(s.ra, s.dec, station.ra, station.dec) < 2.0]
+        self._align_check = ""
+        for old in same:
+            self._align_check = platform_align.verify(old, station)["text"]
+            self._align_stations.remove(old)
+        self._align_stations.append(station)
+        self.on_log(_("station kept: {name} at {rate:+.4f} deg/min").format(
+            name=station.name or _("field"), rate=station.rate_deg_min))
+        self.btn_align_measure.setChecked(False)
+        self._align_solve()
+
+    def _align_clear(self) -> None:
+        self._align_stations.clear()
+        self._align_result = None
+        self._align_check = ""
+        self.btn_align_measure.setChecked(False)
+        self._refresh_align()
+
+    def _align_adopt(self) -> None:
+        if self._align_suggestion is None:
+            return
+        self._apply_target(self._align_suggestion)
+        self.rail.select("frame")
+
+    def _align_flip_parity(self) -> None:
+        self.settings.platform_parity = -self.settings.platform_parity
+        try:
+            self.settings.save()
+        except OSError:
+            pass
+        self._align_solve()
+
+    def _align_solve(self) -> None:
+        """Recompute the correction. Costs astropy, so it is not per frame."""
+        if not self._align_stations:
+            self._align_result = None
+        else:
+            when = datetime.now(UTC)
+            self._align_result = platform_align.solve(
+                self._align_stations, self.sp_lat.value(), self.sp_lon.value(),
+                lst_deg=tonight.lst_at(self.sp_lon.value(), when), when=when,
+                elevation_m=self.sp_elev.value(),
+                parity=self.settings.platform_parity)
+        self._refresh_align()
+
+    # ------------------------------------------------------------- the screen
+    def _update_align(self, status: dict | None) -> None:
+        """Per frame, and therefore cheap: the bar and the live readout only."""
+        if not self.align_window.isVisible():
+            return
+        self._align_status = status
+        if not status:
+            return
+        self.pb_align.setValue(int(status["progress"] * 100))
+        self.btn_align_keep.setEnabled(bool(status["ready"]))
+        rate, r2 = status["rate_deg_min"], status["r2"]
+        text = _("{n} frames · {span:.0f}s").format(n=status["n"],
+                                                    span=status["span_s"])
+        if np.isfinite(rate):
+            text += _(" · {rate:+.4f}°/min · r² {r2:.2f}").format(rate=rate,
+                                                                  r2=r2)
+        if status["reason"]:
+            text += f" · {status['reason']}"
+        self.lbl_align_live.setText(text)
+        self.lbl_align_step.setText(self._align_step_text())
+
+    def _refresh_align(self) -> None:
+        """Everything that changes on an action rather than on a frame."""
+        if not hasattr(self, "lbl_align_step"):
+            return
+        pos = self._align_field()
+        self.lbl_align_target.setText(
+            _("no target chosen") if pos is None else
+            _("{name} · RA {ra:.3f}° Dec {dec:+.3f}°").format(
+                name=pos[2], ra=pos[0], dec=pos[1]))
+        if self._align_stations:
+            self.lbl_align_stations.setText("\n".join(
+                _("{name}  {rate:+.4f}°/min  r² {r2:.2f}  {span:.0f}s").format(
+                    name=(s.name or "—")[:18], rate=s.rate_deg_min, r2=s.r2,
+                    span=s.span_s) for s in self._align_stations))
+        else:
+            self.lbl_align_stations.setText(_("none yet"))
+        self._align_suggest()
+        self._show_align_result()
+        self.lbl_align_step.setText(self._align_step_text())
+
+    def _align_step_text(self) -> str:
+        if self._align_status:
+            return _("Measuring. Leave the tube on the field and do not touch "
+                     "the platform — the rotation being measured is smaller "
+                     "than any nudge. Keep it when the bar fills.")
+        n = len(self._align_stations)
+        if n == 0:
+            return _("Point at a field with stars in it, high enough to be "
+                     "steady, and press measure. Nothing is recorded and the "
+                     "platform is not used up.")
+        if n == 1:
+            return _("One field gives the error along that direction only. "
+                     "Point at the second field below and measure again.")
+        r = self._align_result
+        if r is not None and not r.confident:
+            return _("The fields measured so far do not separate the two "
+                     "screws. Measure the field suggested below.")
+        return _("Apply the correction, then measure a field you already "
+                 "measured: it is what says whether it worked.")
+
+    def _align_suggest(self) -> None:
+        """The field that closes what the stations so far cannot say.
+
+        Astropy again, so it waits for the window to be on screen.
+        """
+        self._align_suggestion = None
+        self.btn_align_adopt.setEnabled(False)
+        if not self.align_window.isVisible():
+            return
+        if len(self._align_stations) >= 2 and (
+                self._align_result is not None and self._align_result.confident):
+            self.lbl_align_next.setText(
+                _("enough fields — measure one again to check the correction"))
+            return
+        try:
+            lst = tonight.lst_at(self.sp_lon.value())
+        except Exception as e:                # ephemeris or clock trouble
+            self.lbl_align_next.setText(str(e))
+            return
+        pick = platform_align.ideal_next(
+            self._align_stations, self.sp_lat.value(), lst,
+            min_alt=max(self.sp_min_alt.value(), 20.0))
+        if pick is None:
+            self.lbl_align_next.setText(_("nothing suitable above the horizon"))
+            return
+        ra, dec, alt, az = pick
+        text = _("next: {alt:.0f}° up, {dir} (RA {ra:.1f}° Dec {dec:+.1f}°)"
+                 ).format(alt=alt, dir=compass_point(az), ra=ra, dec=dec)
+        cat = self._cat()
+        near = cat.near(ra, dec, 12.0, limit=12) if cat else []
+        named = [o for o in near if np.isfinite(o.mag) and o.mag <= 11.0]
+        if named:
+            self._align_suggestion = named[0]
+            self.btn_align_adopt.setEnabled(True)
+            text += "\n" + _("for instance {label}").format(
+                label=named[0].label)
+        self.lbl_align_next.setText(text)
+
+    def _show_align_result(self) -> None:
+        r = self._align_result
+        parity = _("parity {sign:+d}").format(sign=self.settings.platform_parity)
+        if r is None:
+            self.lbl_align_result.setText(_("nothing measured yet") + f" · {parity}")
+            return
+        lines = [r.advice]
+        if r.note:
+            lines.append(r.note)
+        if self._align_check:
+            lines.append(self._align_check)
+        lines.append(_("{n} fields · geometry {cond:.1f} · {parity}").format(
+            n=r.n_stations, cond=r.condition, parity=parity))
+        self.lbl_align_result.setText("\n".join(lines))
 
     def _card_folders(self) -> Card:
         """Where captures go. Defaults live under ~/Astrodoro so a fresh clone
@@ -1080,6 +1934,8 @@ class MainWindow(QMainWindow):
         for key, label, hint in (
                 ("capture_dir", _("sessions"),
                  _("root of the recorded sessions: subs, stacks and previews")),
+                ("bias_dir", _("bias"),
+                 _("where master bias frames are written")),
                 ("dark_dir", _("darks"), _("where master darks are written")),
                 ("flat_dir", _("flats"), _("where master flats are written")),
                 ("export_dir", _("exports"),
@@ -1165,11 +2021,6 @@ class MainWindow(QMainWindow):
         row.addWidget(self.cb_lang, 1)
         c.add_layout(row)
 
-        self.btn_night = QPushButton(_("night mode   (N)"))
-        self._ic(self.btn_night, "moon")
-        self.btn_night.setCheckable(True)
-        self.btn_night.toggled.connect(self.toggle_night)
-        c.add(self.btn_night)
         self.sl_night, wn = self._slider(_("night brightness"), 0, 2, 1, 1.0)
         self.sl_night.valueChanged.connect(self._night_changed)
         c.add(wn)
@@ -1178,18 +2029,8 @@ class MainWindow(QMainWindow):
                                     "glasses, a small target is expensive"))
         self.chk_touch.toggled.connect(self._touch_changed)
         c.add(self.chk_touch)
-        self.btn_full = QPushButton(_("image only   (F)"))
-        self._ic(self.btn_full, "expand")
-        self.btn_full.setCheckable(True)
-        self.btn_full.toggled.connect(self.toggle_full)
-        c.add(self.btn_full)
-        b = QPushButton(_("show the log   (L)"))
-        self._ic(b, "list")
-        b.setCheckable(True)
-        # Deferred lookup: the log is created after the panels.
-        b.toggled.connect(lambda on: self.log.setVisible(on))
-        c.add(b)
-        self.btn_log = b
+        c.add(_hint(_("night mode, image only and the log are on the top bar: "
+                      "they are touched during the night, not before it")))
         return c
 
     # ------------------------------------------------------------------ right
@@ -1265,6 +2106,9 @@ class MainWindow(QMainWindow):
         self.vb = self.view.addViewBox(lockAspect=True, invertY=True)
         self.img = pg.ImageItem()
         self.vb.addItem(self.img)
+        self.realign_arrow = RealignArrow()
+        self.realign_arrow.setVisible(False)
+        self.vb.addItem(self.realign_arrow)
 
         # The map takes the same space as the image, not a corner: looking for a
         # target is done by looking at the whole sky, and 210 px of context does
@@ -1305,7 +2149,7 @@ class MainWindow(QMainWindow):
             "frame": self.context.addWidget(self._ctx_frame()),
             "targets": self.context.addWidget(self._ctx_targets()),
             "stack": self.context.addWidget(self._ctx_stack()),
-            "config": self.context.addWidget(self._ctx_config()),
+            "lucky": self.context.addWidget(self._ctx_lucky()),
         }
         v.addWidget(self.context)
         self._right_col = w
@@ -1451,24 +2295,6 @@ class MainWindow(QMainWindow):
         h.addWidget(c2)
         return w
 
-    def _ctx_config(self) -> QWidget:
-        """A full-width histogram.
-
-        The image stays on screen while you configure, and the histogram is the
-        one readout that is relevant regardless of which panel is open.
-        """
-        c = Card(_("histogram"))
-        self.hist2 = pg.PlotWidget()
-        self.hist2.setLogMode(False, True)
-        self.hist2_rgb = [self.hist2.plot() for _ in range(3)]
-        self.hist2_curve = self.hist2_rgb[0]
-        self.hist2_black = pg.InfiniteLine(angle=90)
-        self.hist2.addItem(self.hist2_black)
-        self.hist2_white = pg.InfiniteLine(angle=90)
-        self.hist2.addItem(self.hist2_white)
-        c.add(self.hist2, 1)
-        return c
-
     def _slider(self, name, lo, hi, val, div):
         hold = QWidget()
         h = QHBoxLayout(hold)
@@ -1517,7 +2343,12 @@ class MainWindow(QMainWindow):
                         ("L", lambda: self.btn_log.toggle()),
                         ("Escape", self._exit_review),
                         ("Space", lambda: self._flag("new_segment")),
-                        ("Ctrl+S", self.save)):
+                        ("R", lambda: self.btn_burst.toggle()
+                         if self._mode == "lucky" else (
+                             self.btn_realign.toggle()
+                             if self._mode == "stack" else None)),
+                        ("Ctrl+S", self.save),
+                        (CONFIG_SHORTCUT, self.open_config)):
             QShortcut(QKeySequence(key), self,
                       fn if key.startswith("Ctrl") else guard(fn))
 
@@ -1588,11 +2419,20 @@ class MainWindow(QMainWindow):
         self.context.setCurrentIndex(self._ctx_index[key])
         # Each mode has a sensible default, but an explicit choice on the bar
         # holds until you change mode again.
-        self._set_view({"frame": "live", "targets": "targets"}.get(key, "stack"))
+        self._set_view({"frame": "live", "targets": "targets",
+                        "lucky": "live"}.get(key, "stack"))
+        # The vitals bar is the one part of the screen that never changes, so in
+        # PLANETS it has to say what it is now measuring: there is no
+        # HFR without stars and no integration without an accumulator.
+        bright = key == "lucky"
+        self.st_hfr.set_label(_("sharpness") if bright else _("HFR"))
+        self.st_integ.set_label(_("burst") if bright else _("integration"))
         if key == "targets":
             self._refresh_targets()
         if key == "frame":
             self._refresh_align_pick()
+        if bright:
+            self._refresh_body()
         self._render(True)
 
     # ================================================================ session
@@ -1634,8 +2474,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "lbl_scale"):
             return
         s = self.pixel_scale()
-        w = self._q.shape[1] if self._q is not None else 1920
-        h = self._q.shape[0] if self._q is not None else 1080
+        w, h = self._frame_size()
         self.lbl_scale.setText(
             _("{scale:.3f}\"/px · field {w:.0f}' x {h:.0f}'").format(
                 scale=s, w=s * w / 60.0, h=s * h / 60.0))
@@ -1729,23 +2568,59 @@ class MainWindow(QMainWindow):
         self._flag("reset")
         self.on_log(_("stack reset"))
 
+    def pick_bias(self) -> None:
+        self._pick_master("bias")
+
     def pick_dark(self) -> None:
-        p, _sel = QFileDialog.getOpenFileName(
-            self, _("master dark"), str(self.settings.path("dark_dir")),
-            "FITS (*.fits)")
-        if p:
-            self._dark_path = p
-            self.lbl_dark.setText(_("dark: {name}").format(name=Path(p).name))
-            self._req(dark_path=p)
+        self._pick_master("dark")
 
     def pick_flat(self) -> None:
+        self._pick_master("flat")
+
+    def _pick_master(self, kind: str) -> None:
         p, _sel = QFileDialog.getOpenFileName(
-            self, _("master flat"), str(self.settings.path("flat_dir")),
-            "FITS (*.fits)")
-        if p:
-            self._flat_path = p
-            self.lbl_flat.setText(_("flat: {name}").format(name=Path(p).name))
-            self._req(flat_path=p)
+            self, _("master {kind}").format(kind=kind),
+            str(self.settings.path(f"{kind}_dir")), "FITS (*.fits)")
+        if not p:
+            return
+        setattr(self, f"_{kind}_path", p)
+        self._show_calibration(kind, p, pending=True)
+        self._req(**{f"{kind}_path": p})
+
+    def _show_calibration(self, kind: str, path: str, reason: str = "",
+                          pending: bool = False) -> None:
+        """The calibration label, saying what is in force rather than what was
+        picked.
+
+        Choosing a file is not the same as it being used: a dark of the wrong
+        geometry is refused by the worker and the frames go out uncalibrated.
+        The label used to show the chosen name either way, so the panel claimed
+        a correction that was not happening and the refusal was a line in a log
+        that had already scrolled."""
+        label = self._calib_labels.get(kind)
+        if label is None:
+            return
+        p = self.pal
+        if reason:
+            label.setText(reason)
+            label.setStyleSheet(f"color: {p.bad}")
+        elif not path:
+            label.setText(_("{kind}: none").format(kind=kind))
+            label.setStyleSheet("")
+        elif pending and not self.worker:
+            # Nothing has checked it yet: it is verified when the capture opens.
+            label.setText(_("{kind}: {name} (checked at Start)").format(
+                kind=kind, name=Path(path).name))
+            label.setStyleSheet(f"color: {p.warn}")
+        else:
+            label.setText(_("{kind}: {name}").format(kind=kind,
+                                                     name=Path(path).name))
+            label.setStyleSheet(f"color: {p.ok}")
+
+    @Slot(dict)
+    def on_calibration(self, d: dict) -> None:
+        self._show_calibration(d.get("kind", "dark"), d.get("path", ""),
+                               d.get("reason", ""))
 
     def _ask_target_name(self) -> bool:
         """Ask for the target name when integration starts.
@@ -1781,6 +2656,309 @@ class MainWindow(QMainWindow):
         if on and not self.worker:
             self.on_log(_("start the capture first"))
 
+    def _realign_toggled(self, on: bool) -> None:
+        if on and not self.worker:
+            self.on_log(_("start the capture first"))
+            self.btn_realign.setChecked(False)     # nothing to pause yet
+            return
+        self.btn_realign.setText(_("Resume   (R)") if on
+                                 else _("Pause & realign   (R)"))
+        self._ic(self.btn_realign, "pause" if on else "target")
+        self.btn_integrate.setEnabled(not on)
+        self._flag("realign_on" if on else "realign_off")
+        if not on:
+            self._update_realign_arrow(None)
+
+    # ======================================================= Moon and planets
+    @property
+    def _body(self) -> str:
+        return self.cb_body.currentData() or "moon"
+
+    def _body_now(self, max_age: float = 30.0):
+        """The selected body, cached. `None` if the ephemeris cannot be computed.
+
+        Cached because the panel, the vitals strip and the push-to arrow all ask
+        for it on a timer, and each answer is a pair of astropy transforms —
+        13 ms measured, orders of magnitude more expensive than the 30 s of
+        movement it saves.
+        """
+        if (self._body_state is not None
+                and self._body_state.body == self._body
+                and time.monotonic() - self._body_t < max_age):
+            return self._body_state
+        try:
+            self._body_state = lucky.body_at(
+                self._body, self.sp_lat.value(), self.sp_lon.value(),
+                elevation_m=self.sp_elev.value())
+        except Exception as e:
+            self.on_log(_("could not compute {body}: {error}").format(
+                body=lucky.BODIES[self._body].label, error=e))
+            self._body_state = None
+        self._body_t = time.monotonic()
+        return self._body_state
+
+    def _body_changed(self, *_args) -> None:
+        """A different body: everything measured about the last one is stale.
+
+        The worker is told because the window it measures in is the size of a
+        disc, and Jupiter inside the Moon's window is measured against sky. The
+        sharpness best goes with it: the two bodies are not on one scale, and a
+        Moon that scored 40 would leave a planet reading 3% of the session's
+        best for the rest of the night.
+        """
+        self._body_state = None
+        self._body_t = 0.0
+        self._req(body=self._body)
+        self._flag("reset_focus_best")
+        self._sync_body_widgets()
+        self._refresh_body()
+
+    def _sync_body_widgets(self) -> None:
+        name = lucky.BODIES[self._body].label
+        self.btn_body_point.setText(_("Point at {body}").format(body=name))
+        self.btn_body_preset.setText(_("Defaults for {body}").format(body=name))
+        self.btn_body_balance.setEnabled(self._body == "moon")
+
+    def _refresh_body(self) -> None:
+        m = self._body_now()
+        if m is None:
+            self.lbl_body.setText(_("ephemeris unavailable"))
+            return
+        self.lbl_body.setText(m.summary())
+        self.lbl_body_fit.setText(self._body_fit_text(m))
+        self.st_body_phase.set(_("{phase}, {pct:.0f}%").format(
+            phase=m.phase_name(), pct=m.illum * 100))
+        self.st_body_alt.set(_("{alt:+.0f}° · {compass}").format(
+            alt=m.alt, compass=compass_point(m.az)))
+        self.st_body_size.set(f"{m.diameter_arcmin:.1f}'" if m.is_moon
+                              else _('{arcsec:.1f}"').format(
+                                  arcsec=m.diameter_arcmin * 60))
+
+    def _body_fit_text(self, m) -> str:
+        """Two different questions, and only one of them is about framing.
+
+        For the Moon it is whether the disc fits, and at 1200 mm it does not.
+        For a planet it never even arises — Jupiter covers two hundredths of a
+        percent of the frame — and what decides the session is whether the image
+        scale resolves the disc at all.
+        """
+        if not m.is_moon:
+            px = m.disc_px(self.pixel_scale())
+            return _("{px:.0f} px across at {scale:.2f}\"/px — a barlow is what "
+                     "buys detail here, not exposure").format(
+                         px=px, scale=self.pixel_scale())
+        frac = m.frame_fraction(self._fov_arcmin())
+        return (_("disc {pct:.0f}% of the short side of the frame").format(
+            pct=frac * 100) if frac <= 1.0 else
+            _("disc {times:.1f}x the short side — it is a mosaic").format(
+                times=frac))
+
+    def _body_point(self) -> None:
+        m = self._body_now(max_age=0.0)
+        if m is None:
+            return
+        if not m.up:
+            self.on_log(_("{body} is {alt:.0f}° below the horizon").format(
+                body=m.name, alt=-m.alt))
+        self._body_target = True
+        self._body_track = time.monotonic()
+        self._target_name = m.name
+        self.st_target.set(self._target_name)
+        self._apply_target(m.as_target())
+        self.rail.select("frame")
+
+    def _body_preset(self) -> None:
+        """The Moon's exposure, scaled to this body's surface brightness.
+
+        One number is kept true — the Moon's — and the rest is arithmetic on
+        published surface brightnesses. Where the scaling asks for more than the
+        seeing allows, the exposure stops and the shortfall is said out loud:
+        past `lucky.FREEZE_S` a longer frame averages two atmospheres together,
+        and there is then no sharp frame in the burst to pick.
+        """
+        s = self.settings
+        exposure, missing = lucky.exposure_for(self._body, s.lucky_exposure_s)
+        self.sp_exp.setValue(exposure)
+        self.sp_gain.setValue(s.lucky_gain)
+        self.cb_bin.setCurrentText(str(s.lucky_binning))
+        self.on_log(_("{body}: {exp:.4f}s, gain {gain}, bin{bin} — now adjust "
+                      "the exposure by the histogram").format(
+                          body=lucky.BODIES[self._body].label, exp=exposure,
+                          gain=s.lucky_gain, bin=s.lucky_binning))
+        if missing > 1.05:
+            self.on_log(_("{body} wants {factor:.0f}x more light than {exp:.3f}s "
+                          "gives; past that the exposure stops freezing the "
+                          "seeing, so raise the gain instead").format(
+                              body=lucky.BODIES[self._body].label,
+                              factor=missing, exp=lucky.FREEZE_S))
+
+    def _apply_suggested_exposure(self) -> None:
+        m = self._last_stats.get("lucky") or {}
+        factor = m.get("factor")
+        if not factor or not np.isfinite(factor):
+            self.on_log(_("no frame measured yet"))
+            return
+        new = float(np.clip(self.sp_exp.value() * factor, 0.001, 600.0))
+        self.sp_exp.setValue(new)
+        self.on_log(_("exposure {exp:.4f}s ({factor:.2f}x)").format(
+            exp=new, factor=factor))
+
+    def _follow_toggled(self, on: bool) -> None:
+        """Turning it on frames the body, since panning a fitted view does not.
+
+        The whole frame is on screen at the start of a session, and there
+        centring changes nothing you can see: the body is already in it and the
+        view has nowhere to move to. So the first thing following does is zoom
+        to the body — which is also the only view in which it is worth having.
+        """
+        if not on or self._view == "map":
+            return
+        m = self._last_stats.get("lucky") or {}
+        cx, cy, side = m.get("cx"), m.get("cy"), m.get("window", 0)
+        if not side or cx is None or not np.isfinite(cx):
+            return
+        half = side * FOLLOW_ZOOM / 2.0
+        if self.vb.viewRect().width() > side * FOLLOW_ZOOM:
+            self.vb.setRange(xRange=(cx - half, cx + half),
+                             yRange=(cy - half, cy + half), padding=0)
+
+    def _follow_body(self, m: dict) -> None:
+        """Move the view onto the body, keeping whatever zoom is set.
+
+        The frame is never touched: what moves is the rectangle of it being
+        looked at. Anything else would mean resampling 11.7 MP on every drawn
+        frame to correct for something the stack corrects for free — and would
+        put an interpolation between the eye and the focus it is judging.
+        """
+        cx, cy = m.get("cx", float("nan")), m.get("cy", float("nan"))
+        if not (np.isfinite(cx) and np.isfinite(cy)):
+            return
+        rect = self.vb.viewRect()
+        w, h = rect.width(), rect.height()
+        self.vb.setRange(xRange=(cx - w / 2, cx + w / 2),
+                         yRange=(cy - h / 2, cy + h / 2), padding=0)
+
+    def _lucky_fit_white(self) -> None:
+        src = self._src()
+        if src is None:
+            self.on_log(_("no frame on screen"))
+            return
+        top = float(np.max(src))
+        lo, hi = LUCKY_WHITE
+        self.sl_lucky_white.setValue(int(np.clip(round(top * 100) + 2, lo, hi)))
+
+    def _lucky_balance(self) -> None:
+        """Grey-world on the lit disc — here a measurement, not an assumption.
+
+        The usual objection to grey-world is that it assumes the subject is
+        grey. On the Moon the subject *is* grey: its colour differences are a
+        few percent, which is why they only appear under a saturation boost. So
+        matching the three medians over the disc is a white balance measured on
+        the target, the same argument as `equalize_channels` makes for the sky.
+
+        Which is exactly why it is the Moon's alone: on Mars the same operation
+        would neutralise a colour the planet has, and call it a sensor
+        correction.
+        """
+        if self._body != "moon":
+            self.on_log(_("grey-world only means anything on the Moon: {body} "
+                          "has a colour of its own").format(
+                              body=lucky.BODIES[self._body].label))
+            return
+        src = self._src()
+        if src is None or src.ndim != 3:
+            self.on_log(_("no colour image to balance"))
+            return
+        lum = src.mean(axis=2)
+        lit = lum >= max(float(lum.max()) * 0.25, 1e-4)
+        if int(lit.sum()) < 100:
+            self.on_log(_("no disc in the frame to balance on"))
+            return
+        med = [float(np.median(src[..., k][lit])) for k in range(3)]
+        if min(med) <= 0:
+            self.on_log(_("a channel has no signal on the disc"))
+            return
+        for sl, m in ((self.sl_lucky_r, med[0]), (self.sl_lucky_b, med[2])):
+            sl.setValue(int(round(np.clip(med[1] / m, 0.3, 3.0) * 100)))
+        g = self._lucky_gains()
+        self.on_log(_("disc balance: R={red:.2f}  B={blue:.2f}").format(
+            red=g[0], blue=g[2]))
+
+    def _set_burst_button(self, on: bool) -> None:
+        """The button's appearance, without re-issuing the command."""
+        self.btn_burst.blockSignals(True)
+        self.btn_burst.setChecked(on)
+        self.btn_burst.blockSignals(False)
+        self.btn_burst.setText(_("Stop the burst") if on
+                               else _("Record burst   (R)"))
+        self._ic(self.btn_burst, "stop" if on else "play")
+
+    def _burst_toggled(self, on: bool) -> None:
+        if on and not self.worker:
+            self.on_log(_("start the capture before recording a burst"))
+            self._set_burst_button(False)
+            return
+        self._set_burst_button(on)
+        if on:
+            self._req(target_name=(self._target_name
+                                   or lucky.BODIES[self._body].label))
+        self._flag("burst_start" if on else "burst_stop")
+
+    def _show_lucky_frame(self, m: dict) -> None:
+        p = self.pal
+        peak = m.get("peak", float("nan"))
+        clipped = m.get("clipped", 0.0)
+        colour = (p.bad if clipped > 0.001
+                  else (p.ok if peak > lucky.HEADROOM * 0.5 else p.warn))
+        self.st_peak.set(f"{peak * 100:.0f}%" if np.isfinite(peak) else "—",
+                         colour)
+        self.st_clipped.set(f"{clipped * 100:.2f}%",
+                            p.bad if clipped > 0.001 else None)
+        sharp = m.get("sharpness", float("nan"))
+        self.st_sharp.set(f"{sharp:.1f}" if np.isfinite(sharp) else "—")
+        side = int(m.get("window", 0))
+        self.st_window.set(_("{px} px").format(px=side) if side
+                           else _("whole frame"))
+        self.lbl_body_exp.setText(m.get("advice", ""))
+        self.lbl_body_exp.setStyleSheet(f"color: {colour}")
+
+        if self.chk_follow.isChecked():
+            self._follow_body(m)
+
+        recording = bool(m.get("recording"))
+        self.prog_burst.setValue(int(m.get("progress", 0.0) * 100))
+        self.st_integ.set(_hms(m.get("elapsed", 0.0)))
+        self.st_frames.set(str(m.get("frames", 0)))
+        self._set_state("recording" if recording else "live")
+        # Only the readout. Whether the button is pressed follows `on_burst`,
+        # the worker's own account — these statistics can be one frame stale,
+        # and acting on that cancelled the burst it had just started.
+        if recording:
+            self.lbl_burst.setVisible(True)
+            self.lbl_burst.setText(_("{n} frames · {seconds:.0f}s · {folder}"
+                                     ).format(n=m.get("frames", 0),
+                                              seconds=m.get("elapsed", 0.0),
+                                              folder=_shorten(m.get("folder", ""))))
+
+    def capture_bias(self) -> None:
+        if not self.worker:
+            self.on_log(_("start the capture before recording a bias"))
+            return
+        from PySide6.QtWidgets import QInputDialog
+        n, ok = QInputDialog.getInt(
+            self, _("Record bias"),
+            _("How many frames?\n\n"
+              "CAP THE SENSOR before confirming.\n"
+              "The exposure drops to the camera's minimum during the\n"
+              "recording and goes back to the session's afterwards."),
+            30, 5, 200)
+        if not ok:
+            return
+        self._req(bias_frames=n)
+        self._flag("capture_bias")
+        self.on_log(_("recording a bias of {n} frames — keep the sensor capped"
+                      ).format(n=n))
+
     def capture_dark(self) -> None:
         if not self.worker:
             self.on_log(_("start the capture before recording a dark"))
@@ -1807,8 +2985,9 @@ class MainWindow(QMainWindow):
             self, _("Record flat"),
             _("How many frames?\n\n"
               "POINT at an evenly illuminated surface and set the exposure so\n"
-              "the histogram lands near half scale. The loaded dark is\n"
-              "subtracted if it matches. Capture pauses while recording."),
+              "the histogram lands near half scale. The bias — or a dark of\n"
+              "this same exposure — is subtracted from it. Capture pauses\n"
+              "while recording."),
             20, 5, 100)
         if not ok:
             return
@@ -1830,7 +3009,8 @@ class MainWindow(QMainWindow):
             gain=self.sp_gain.value(), offset=self.sp_offset.value(),
             target_temp=(self.sp_temp.value()
                          if self.btn_cooler.isChecked() else None),
-            dark_path=self._dark_path, flat_path=self._flat_path,
+            bias_path=self._bias_path, dark_path=self._dark_path,
+            flat_path=self._flat_path,
             quality_weighting=self.chk_weight.isChecked(),
             strictness=self.cb_strictness.currentData(),
             sigma_clip=(self.sp_sigma.value()
@@ -1840,6 +3020,13 @@ class MainWindow(QMainWindow):
             record=self.chk_record.isChecked(), target_name=self._target_name,
             record_every=self.sp_every.value(),
             compress=self.chk_compress.isChecked(),
+            # From the fields and not from the saved settings: `_req` is a
+            # no-op before the worker exists, so a burst length set while idle
+            # would otherwise be silently discarded at Start.
+            burst_seconds=self.sp_burst_sec.value(),
+            burst_frames=self.sp_burst_frames.value(),
+            burst_compress=self.chk_burst_rice.isChecked(),
+            body=self._body,
         )
         self._exposure = cfg.exposure
         self._exit_review()
@@ -1858,7 +3045,10 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self.on_finished)
         self.worker.paused.connect(self.on_paused)
         self.worker.cooling.connect(self.on_cooling)
+        self.worker.bias_saved.connect(self.on_bias_saved)
         self.worker.dark_saved.connect(self.on_dark_saved)
+        self.worker.burst_state.connect(self.on_burst)
+        self.worker.calibration.connect(self.on_calibration)
         self.worker.flat_saved.connect(self.on_flat_saved)
         # A star pinned before this session started stays pinned.
         self.worker.set_loupe(self._loupe_xy)
@@ -1956,18 +3146,18 @@ class MainWindow(QMainWindow):
         QApplication.instance().setStyleSheet(stylesheet(p, self._large_targets))
         for plot, curve, line in (
                 (self.hist, self.hist_curve, self.hist_black),
-                (self.hist2, self.hist2_curve, self.hist2_black)):
+                (self.hist3, self.hist3_rgb[0], self.hist3_black)):
             plot.setBackground(p.plot_bg)
             for ax in ("left", "bottom"):
                 plot.getAxis(ax).setPen(p.text_dim)
                 plot.getAxis(ax).setTextPen(p.text_dim)
             curve.setPen(pg.mkPen(p.curve, width=2))
             line.setPen(pg.mkPen(p.mark, style=Qt.DashLine))
-        for curves in (self.hist_rgb, self.hist2_rgb):
+        for curves in (self.hist_rgb, self.hist3_rgb):
             for curve, pen in zip(curves, self._rgb_pens(), strict=True):
                 curve.setPen(pen)
         # Black dashed, white dotted: in night mode colour separates nothing.
-        for lw in (self.hist_white, self.hist2_white):
+        for lw in (self.hist_white, self.hist3_white):
             lw.setPen(pg.mkPen(p.text_dim, style=Qt.DotLine))
         self.view.setBackground(p.plot_bg)
         self.loupe.set_palette(p)
@@ -2011,6 +3201,11 @@ class MainWindow(QMainWindow):
             self.skymap.fov = 40.0
             self.skymap.update()
             return
+        # Fitting is "show me the whole frame", which is the opposite of
+        # following one body inside it. Without this the next drawn frame
+        # undoes the fit and the key looks broken.
+        if self._mode == "lucky":
+            self.chk_follow.setChecked(False)
         self.vb.autoRange()
 
     def zoom_one(self) -> None:
@@ -2151,10 +3346,23 @@ class MainWindow(QMainWindow):
         self._when_guard = False
         self._refresh_targets()
 
+    def _frame_size(self) -> tuple[int, int]:
+        """The frame in pixels: the one on screen, or the sensor at this bin.
+
+        The fallback used to be 1920x1080, which is not this sensor and not any
+        sensor here: with the real 4144x2822 the Moon is 83% of the short side
+        and fits, and with the placeholder it came out at 2.2x and the panel
+        said "it is a mosaic". Every field-of-view answer is wanted *before* the
+        capture opens — that is when you decide whether the target fits.
+        """
+        if self._q is not None:
+            return int(self._q.shape[1]), int(self._q.shape[0])
+        b = max(int(self.cb_bin.currentText()), 1)
+        return self.settings.sensor_width // b, self.settings.sensor_height // b
+
     def _fov_arcmin(self) -> tuple[float, float]:
         """The frame in arcminutes, from the optics and the selected binning."""
-        w = self._q.shape[1] if self._q is not None else 1920
-        h = self._q.shape[0] if self._q is not None else 1080
+        w, h = self._frame_size()
         e = self.pixel_scale() / 60.0
         return e * w, e * h
 
@@ -2429,7 +3637,8 @@ class MainWindow(QMainWindow):
             self.lbl_url.setVisible(False)
             self.lbl_url.setText("")
             self.lbl_sensor.setText(_("off"))
-            self.lbl_altaz.setText("—")
+            self.lbl_altaz.setText("")
+            self.lbl_altaz.setVisible(False)
             self.btn_reset_align.setEnabled(False)
 
     def _qr(self, url: str) -> QPixmap:
@@ -2502,6 +3711,7 @@ class MainWindow(QMainWindow):
         alt, az = p.altaz
         self.lbl_altaz.setText(
             f"alt {alt:+5.1f}°   az {az:5.1f}°  {compass_point(az)}")
+        self.lbl_altaz.setVisible(True)
         self.lbl_sensor.setText(self._sensor_state_text())
 
         now = time.monotonic()
@@ -2537,6 +3747,7 @@ class MainWindow(QMainWindow):
 
     def clear_target(self) -> None:
         self._target = None
+        self._body_target = False
         self.ed_goto.clear()
         self.lbl_goto.setText(_("no target"))
         self.lbl_goto_arrow.setText("")
@@ -2641,8 +3852,7 @@ class MainWindow(QMainWindow):
             # search for it by name.
             if not any(x.label == name for x in marks):
                 marks = [*marks, m]
-        w = self._q.shape[1] if self._q is not None else 1920
-        h = self._q.shape[0] if self._q is not None else 1080
+        w, h = self._frame_size()
         e = self.pixel_scale() / 3600.0
         self.skymap.cam_fov = (e * w, e * h)
         anchor = self.point.star.label if self.point.star is not None else ""
@@ -2825,8 +4035,10 @@ class MainWindow(QMainWindow):
                 "live": (_("LIVE"), p.accent),
                 "exposing": (_("EXPOSING"), p.accent),
                 "integrating": (_("INTEGRATING"), p.ok),
+                "realigning": (_("REALIGNING"), p.warn),
                 "replay": (_("REPLAY"), p.accent),
                 "ready": (_("READY"), p.accent),
+                "recording": (_("RECORDING"), p.ok),
                 "paused": (_("PAUSED"), p.warn),
                 "stopping": (_("STOPPING"), p.warn),
                 "error": (_("ERROR"), p.bad)}
@@ -2845,6 +4057,16 @@ class MainWindow(QMainWindow):
             self._refresh_targets()
         if self._mode == "frame":
             self._refresh_align_pick()        # throttled to 30 s inside
+        if self._mode == "lucky" and time.monotonic() - self._body_t > 30.0:
+            self._refresh_body()
+        # These are the targets whose coordinates go stale while you are still
+        # pushing the tube towards them: the Moon moves its own diameter in an
+        # hour, and the planets are slower but not still.
+        if self._body_target and time.monotonic() - self._body_track > 60.0:
+            self._body_track = time.monotonic()
+            fresh = self._body_now(max_age=0.0)
+            if fresh is not None:
+                self._apply_target(fresh.as_target())
         if self.worker is None:
             self.prog.setValue(0)
             self.phase.setText(_("EXPOSURE"))
@@ -2877,6 +4099,11 @@ class MainWindow(QMainWindow):
         if streak >= 5:
             msgs.append((_("{n} frames rejected in a row — cloud, dew or the "
                            "target left the frame").format(n=streak), p.bad))
+        bright = st.get("lucky") or {}
+        if bright.get("clipped", 0.0) > 0.001:
+            msgs.append((_("the disc is clipping on {pct:.2f}% of the measured "
+                           "window — shorten the exposure").format(
+                               pct=bright["clipped"] * 100), p.bad))
         cool = self._cool
         if cool.get("phase") == "saturated":
             msgs.append((cool.get("message", _("cooler saturated")), p.bad))
@@ -2910,15 +4137,46 @@ class MainWindow(QMainWindow):
         self.sp_temp.setEnabled(has_cooler)
         if not has_cooler:
             self.lbl_cool.setText(_("camera without cooling"))
+        if info.get("live") and info.get("width"):
+            b = max(int(info.get("bin", 1)), 1)
+            self.settings.sensor_width = int(info["width"]) * b
+            self.settings.sensor_height = int(info["height"]) * b
         self._set_state("replay" if not info.get("live", True) else "exposing")
         self.on_log(f"{info['name']}  {info.get('port','')}  "
                     f"{info['width']}x{info['height']} bin{info['bin']}  "
                     f"Bayer {info['bayer']}  "
                     + _("scale 0..{full}").format(full=info['full_scale']))
 
+    def _update_realign_arrow(self, info: dict | None) -> None:
+        if not info or self._live is None:
+            self.realign_arrow.setVisible(False)
+            return
+        h, w = self._live.shape[:2]
+        cx, cy = w / 2.0, h / 2.0
+        p = self.pal
+        if not info["ok"]:
+            # The specific reason (already localised in worker._realign_info),
+            # not a generic label: register.estimate's failures range from
+            # "too few stars" to "rms above the limit", and which one it is
+            # says whether to reframe further or just hold still and wait.
+            self.realign_arrow.set_info(cx, cy, 0, 0, ok=False,
+                                        on_target=False, color=p.bad,
+                                        label=info["reason"])
+        elif info["distance"] < REALIGN_ON_TARGET_PX:
+            self.realign_arrow.set_info(cx, cy, 0, 0, ok=True,
+                                        on_target=True, color=p.ok,
+                                        label=_("on target"))
+        else:
+            self.realign_arrow.set_info(
+                cx, cy, info["dx"], info["dy"], ok=True, on_target=False,
+                color=p.warn, label=_("{px:.0f}px").format(
+                    px=info["distance"]))
+        self.realign_arrow.setVisible(True)
+
     @Slot(object, object, object, dict)
     def on_frame(self, live, stack, cfa, st: dict) -> None:
         self._live = live
+        self._update_realign_arrow(st.get("realign"))
         if not st.get("n_stacked"):
             # A reset creates a new stacker and the worker starts emitting
             # stack=None. Without discarding here, the last accumulated image
@@ -2928,6 +4186,7 @@ class MainWindow(QMainWindow):
             self._stack = stack
         self._last_stats = st
         self._t_frame = time.time()
+        self._update_align(st.get("align"))
         if "exposure" in st:
             self._exposure = st["exposure"]
         acc = st.get("accepted")
@@ -2952,6 +4211,8 @@ class MainWindow(QMainWindow):
             self._hist.push(st.get("frame_index"), cfa, st.get("bayer"), info,
                             accepted=bool(acc))
             self._set_state("integrating" if st.get("n_stacked") else "exposing")
+        elif st.get("realigning"):
+            self._set_state("realigning")
         elif st.get("can_integrate"):
             # In Integrate mode but not integrating yet: the state has to make
             # that obvious, otherwise you think you are accumulating and are not.
@@ -2990,6 +4251,8 @@ class MainWindow(QMainWindow):
                            else _("{min:.0f} min").format(min=u / 60))
         sm = plat.get("corner_smear_px_min", float("nan"))
         self.st_smear.set(f"{sm:.2f} px/min" if np.isfinite(sm) else "—")
+        if st.get("mode") == "lucky":
+            self._show_lucky_frame(st.get("lucky") or {})
         self._update_view_label()
         self._render(True)
         self._update_goto()
@@ -3012,15 +4275,30 @@ class MainWindow(QMainWindow):
         # ear is exactly what you do when you are not looking at the screen.
         self.beeper.beep_ratio(ratio)
 
+    @Slot(bool)
+    def on_burst(self, on: bool) -> None:
+        """Whether a burst is running, from the worker rather than inferred.
+
+        A burst also ends on its own at its limit, so the button has to be able
+        to come back up without anyone pressing it.
+        """
+        self._set_burst_button(on)
+        if not on:
+            self.prog_burst.setValue(0)
+
+    # Both of these only remember the path: the label belongs to
+    # `on_calibration`, which speaks after the worker has tried to load it.
     @Slot(str)
     def on_flat_saved(self, path: str) -> None:
         self._flat_path = path
-        self.lbl_flat.setText(_("flat: {name}").format(name=Path(path).name))
 
     @Slot(str)
     def on_dark_saved(self, path: str) -> None:
         self._dark_path = path
-        self.lbl_dark.setText(_("dark: {name}").format(name=Path(path).name))
+
+    @Slot(str)
+    def on_bias_saved(self, path: str) -> None:
+        self._bias_path = path
 
     @Slot(dict)
     def on_cooling(self, st: dict) -> None:
@@ -3084,6 +4362,10 @@ class MainWindow(QMainWindow):
         self.btn_finish.setText(_("Finish"))
         if self.btn_integrate.isChecked():
             self.btn_integrate.setChecked(False)
+        if self.btn_realign.isChecked():
+            self.btn_realign.setChecked(False)     # worker gone, no resume to send
+        self._update_realign_arrow(None)
+        self._set_burst_button(False)
         self._set_state("idle")
         self.on_log(_("session ended"))
 
@@ -3235,32 +4517,6 @@ class MainWindow(QMainWindow):
             return self._live
         return self._stack if self._stack is not None else self._live
 
-    def _prepared(self):
-        """The array to display, with the gradient already removed if asked.
-
-        Cached by (source, enabled, degree): removing the gradient costs tens of
-        milliseconds and cannot run on every slider move.
-        """
-        src = self._src()
-        if src is None:
-            return None
-        key = (self.chk_bg.isChecked(), self.sp_bg_deg.value())
-        # Compare the array by identity and hold the reference, rather than
-        # keying on id(): CPython reuses the address of a freed array, and a new
-        # frame would inherit the previous stack's preparation.
-        if (self._prep_key == key and self._prep is not None
-                and self._prep_src is src):
-            return self._prep
-        out = src
-        if self.chk_bg.isChecked():
-            out, ok = background.remove(src, degree=self.sp_bg_deg.value(),
-                                        grid=12)
-            self.lbl_bg.setText(_("applied") if ok else _("not enough samples"))
-        else:
-            self.lbl_bg.setText("")
-        self._prep, self._prep_key, self._prep_src = out, key, src
-        return out
-
     def _quantize(self, src) -> None:
         if self._q_src is src and self._q is not None:
             return
@@ -3268,7 +4524,16 @@ class MainWindow(QMainWindow):
         self._q_src = src
 
     def _channel_gains(self) -> list[float]:
+        # PLANETS balances on its own sliders, and the histogram draws
+        # with these: curves that do not move with what is on screen stop being
+        # an exposure meter, which on a bright body is the histogram's whole job.
+        if self._mode == "lucky":
+            return self._lucky_gains()
         return [sl.value() / sl._div for sl in (self.sl_r, self.sl_g, self.sl_b)]
+
+    def _lucky_gains(self) -> list[float]:
+        return [self.sl_lucky_r.value() / self.sl_lucky_r._div, 1.0,
+                self.sl_lucky_b.value() / self.sl_lucky_b._div]
 
     def equalize_channels(self) -> None:
         """Gains that match the channel medians, with green as the reference.
@@ -3278,7 +4543,7 @@ class MainWindow(QMainWindow):
         guessing on a slider. Green stays at 1.00 because on a Bayer sensor it
         has twice the pixels and is the least noisy of the three.
         """
-        src = self._prepared()
+        src = self._src()
         if src is None or src.ndim != 3:
             self.on_log(_("no colour image to equalise"))
             return
@@ -3300,8 +4565,58 @@ class MainWindow(QMainWindow):
                 f"{c}={g:.2f}"
                 for c, g in zip("RGB", self._channel_gains(), strict=True))))
 
+    def _stretch_lucky(self, src) -> np.ndarray:
+        """Linear, with a white point and a gamma. Deliberately no autostretch.
+
+        The deep-sky path does the wrong thing twice here: it lifts a background
+        that is empty sky, and it renormalises on every frame, which makes the
+        disc pulse while you are trying to judge focus by eye. What the Moon
+        needs is the opposite — a fixed mapping, so that two frames looking
+        different means they *are* different.
+
+        Through a lookup table, like the deep-sky path and for the same reason,
+        which matters more here: the balance, the white point and the gamma are
+        each a function of one input value, so the three fold into a single
+        65536-entry table per channel. Measured at bin1 (11.7 MP) that is 64 ms
+        against 384 ms doing the same arithmetic on the image, bit for bit the
+        same result — and this runs at the frame rate, not once a stack.
+        """
+        q = self._q
+        white = max(self.sl_lucky_white.value() / self.sl_lucky_white._div, 0.02)
+        gamma = self.sl_lucky_gamma.value() / self.sl_lucky_gamma._div
+        sat = self.sl_lucky_sat.value() / self.sl_lucky_sat._div
+        gains = self._lucky_gains() if q.ndim == 3 else [1.0]
+        level = np.arange(65536, dtype=np.float32) / 65535.0
+
+        def table(gain: float) -> np.ndarray:
+            # Balance on the linear signal: it corrects the sensor's channel
+            # response, which happened before any of the rest of this.
+            t = np.clip(level * gain / white, 0.0, 1.0)
+            return stretch.to_uint8(t ** gamma if abs(gamma - 1.0) > 1e-3 else t)
+
+        if q.ndim == 2:
+            out = np.repeat(table(1.0)[q][..., None], 3, axis=2)
+        else:
+            out = np.empty(q.shape, np.uint8)
+            for k in range(3):
+                out[..., k] = table(gains[k])[q[..., k]]
+        # Saturation after the gamma: the gamma compresses the distance between
+        # the channels, which is exactly what this gives back.
+        if abs(sat - 1.0) > 1e-3:
+            out = stretch.saturate_u8(out, sat)
+        # The black point line on the histogram belongs to the MTF estimate,
+        # which this path never runs.
+        self._black = 0.0
+        night = image_lut(self.pal)
+        # Green, not the mean of the three: the night view is monochrome either
+        # way, green carries half the photosites and is the least noisy channel,
+        # and the mean allocates a float64 copy of the frame — 94 ms at bin1.
+        return night[out[..., 1]] if night is not None else out
+
     def _stretch(self) -> np.ndarray:
-        q, src = self._q, self._prepared()
+        q, src = self._q, self._src()
+        if self._mode == "lucky":
+            return self._stretch_lucky(src)
         target = self.sl_bg.value() / self.sl_bg._div
         clip = -self.sl_clip.value() / self.sl_clip._div
         sat = self.sl_sat.value() / self.sl_sat._div
@@ -3353,14 +4668,14 @@ class MainWindow(QMainWindow):
         return out
 
     def _display(self) -> np.ndarray:
-        src = self._prepared()
+        src = self._src()
         if src is None:
             return np.zeros((1, 1, 3), np.uint8)
         self._quantize(src)
         return self._stretch()
 
     def _render(self, force: bool = False) -> None:
-        src = self._prepared()
+        src = self._src()
         if src is None:
             return
         self._quantize(src)
@@ -3387,13 +4702,13 @@ class MainWindow(QMainWindow):
                         for k in range(min(3, sample.shape[2]))]
         else:
             channels = [sample]
-        top = max(max(float(c.max()) for c in channels), 1e-4)
+        top = _histogram_top(channels)
         white = self.sl_white.value() / self.sl_white._div
-        for lw in (self.hist_white, self.hist2_white):
+        for lw in (self.hist_white, self.hist3_white):
             lw.setValue(white)
             lw.setVisible(white < top)
         for curves, line in ((self.hist_rgb, self.hist_black),
-                             (self.hist2_rgb, self.hist2_black)):
+                             (self.hist3_rgb, self.hist3_black)):
             for k, curve in enumerate(curves):
                 if k >= len(channels):
                     curve.setData([], [])
@@ -3411,17 +4726,43 @@ class MainWindow(QMainWindow):
         self._exposure = self.sp_exp.value()
         self._update_scale_label()
 
-    def closeEvent(self, ev) -> None:
+    def _store_config(self, _result: int = 0, save: bool = True) -> None:
+        """Persist the configuration window's fields.
+
+        Called when that window closes and again on the way out, because the
+        window may never have been opened.
+        """
         s = self.settings
-        s.exposure_s = self.sp_exp.value()
-        s.gain = self.sp_gain.value()
-        s.offset = self.sp_offset.value()
-        s.binning = int(self.cb_bin.currentText())
         s.latitude = self.sp_lat.value()
         s.longitude = self.sp_lon.value()
         s.elevation_m = self.sp_elev.value()
         s.focal_length_mm = self.sp_focal.value()
         s.pixel_size_um = self.sp_pixel.value()
+        if save:
+            try:
+                s.save()
+            except OSError:
+                pass
+
+    def closeEvent(self, ev) -> None:
+        s = self.settings
+        # Not in PLANETS: the capture strip is holding milliseconds
+        # there, and writing them over the deep-sky defaults means the next
+        # session opens at 8 ms and gain 100 pointed at a galaxy.
+        if self._mode != "lucky":
+            s.exposure_s = self.sp_exp.value()
+            s.gain = self.sp_gain.value()
+            s.offset = self.sp_offset.value()
+            s.binning = int(self.cb_bin.currentText())
+        s.lucky_burst_seconds = self.sp_burst_sec.value()
+        s.lucky_burst_frames = self.sp_burst_frames.value()
+        s.lucky_burst_compress = self.chk_burst_rice.isChecked()
+        s.lucky_gamma = self.sl_lucky_gamma.value() / self.sl_lucky_gamma._div
+        s.lucky_wb_red, _g, s.lucky_wb_blue = self._lucky_gains()
+        s.lucky_saturation = self.sl_lucky_sat.value() / self.sl_lucky_sat._div
+        s.lucky_body = self._body
+        s.lucky_follow = self.chk_follow.isChecked()
+        self._store_config(save=False)
         s.target_min_alt = self.sp_min_alt.value()
         s.target_max_mag = self.sp_max_mag.value()
         s.target_family = self.cb_family.currentData()
@@ -3442,6 +4783,36 @@ class MainWindow(QMainWindow):
 
 
 # -------------------------------------------------------------------- helpers
+def _histogram_top(channels: list) -> float:
+    """Right edge of the histogram, from the sky rather than from the brightest
+    pixel.
+
+    Measured on an 8 s sub of the Veil: 137 of the 137529 sampled pixels — one
+    part in a thousand — were setting the top to 0.57 of full scale, which put
+    the sky in bin 35 and left 84% of the plot empty. One bright star decided
+    the axis of the readout you use to judge every other frame of the night.
+
+    A high percentile is not enough on its own: this camera delivers a few
+    hundredths of a percent of hot pixels, which is exactly the population a
+    99.99th percentile lands in. The median is what cannot be moved by them, so
+    the scale is anchored there — the sky peak at a third of the width — and the
+    percentile only widens it when the bright tail genuinely reaches further. On
+    that same frame it gives 0.24, with the sky at bin 85 of 256.
+
+    Saturation still overrides both: when enough pixels sit at the top of the
+    scale for it to mean something, the plot goes to full scale so the wall
+    against the right edge is visible instead of cropped out of the picture. A
+    handful of hot pixels does not qualify — that is the case this ignores.
+    """
+    sky = max(float(np.median(c)) for c in channels)
+    tail = max(float(np.percentile(c, HISTOGRAM_TAIL_PERCENTILE))
+               for c in channels)
+    top = max(HISTOGRAM_SKY_SPAN * sky, tail, 1e-4)
+    if any(float((c >= 0.99).mean()) > SATURATED_FRACTION for c in channels):
+        top = max(top, 1.0)
+    return top
+
+
 def _tag(text: str) -> QLabel:
     """A short label next to a field, at the width of its own text."""
     lab = QLabel(text)

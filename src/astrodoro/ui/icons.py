@@ -51,6 +51,10 @@ STROKE = {
     "moon_dim": 'M20 14.2A8.2 8.2 0 1 1 10.4 3.4 6.6 6.6 0 0 0 20 14.2z'
                 ' M12.5 9.5h.01 M15 12h.01',
     "dark":    'M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M6.6 12h10.8',
+    # The bias is the same capped sensor as the dark with almost no exposure,
+    # so it is the same circle with a much shorter line — the two rows of the
+    # calibration card have to be told apart at a glance, in the dark.
+    "bias":    'M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M10.2 12h3.6',
     "grid":    'M4.5 4.5h15v15h-15z M4.5 9.5h15 M4.5 14.5h15 M9.5 4.5v15'
                ' M14.5 4.5v15',
     # The project's own mark: the telescope of the engraved icon reduced to what

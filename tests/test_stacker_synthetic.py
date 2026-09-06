@@ -96,6 +96,47 @@ def test_stack_survives_a_platform_reset_and_gains_snr():
     assert st.coverage().max() > 0.5
 
 
+def test_preview_alignment_reports_the_offset_without_mutating_state():
+    """Same trick as a manual recentring, but read-only: the arrow that guides
+    the user has to reflect the true offset without ever touching accum,
+    weight or the reference — that is the whole point of pausing first."""
+    from astrodoro.core.stars import detect
+
+    st = LiveStacker((H, W), channels=1, ref_refresh=6, min_matched=8,
+                     max_rms=2.0)
+    ref_img = render((0.0, 0.0), 0.0)
+    outcome = st.add(ref_img[:, :, None], ref_img, exposure=5.0, lum_scale=1.0)
+    assert outcome.accepted and st.started
+
+    accum_before = st.accum.copy()
+    weight_before = st.weight.copy()
+    n_before = st.n_stacked
+    best_fwhm_before = st.best_fwhm
+    ref_stars_before = st.ref_stars
+
+    shift = (35.0, -22.0)
+    moved_stars = detect(render(shift, 0.0), scale=1.0)
+    al = st.preview_alignment(moved_stars)
+
+    assert al is not None and al.ok
+    # `al.shift` is the translation taking the moved frame INTO the reference,
+    # so it is the negative of the physical offset applied above.
+    assert abs(al.shift[0] - (-shift[0])) < 1.0
+    assert abs(al.shift[1] - (-shift[1])) < 1.0
+
+    assert np.array_equal(st.accum, accum_before)
+    assert np.array_equal(st.weight, weight_before)
+    assert st.n_stacked == n_before
+    assert st.best_fwhm == best_fwhm_before
+    assert st.ref_stars is ref_stars_before
+
+
+def test_preview_alignment_none_before_a_reference_exists():
+    st = LiveStacker((H, W), channels=1)
+    from astrodoro.core.stars import detect
+    assert st.preview_alignment(detect(render((0.0, 0.0), 0.0), scale=1.0)) is None
+
+
 def test_sigma_clipping_removes_the_satellite():
     frames = _sequence()
     st = LiveStacker((H, W), channels=1, ref_refresh=6, sigma_clip=3.0)

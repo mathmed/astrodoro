@@ -123,7 +123,7 @@ def test_no_panel_is_wider_than_its_column(window):
     """A panel wider than the column means a horizontal scrollbar, which in the
     dark hides half the controls without warning."""
     w = window
-    for mode in ("targets", "stack", "config", "frame"):
+    for mode in ("targets", "stack", "lucky", "frame"):
         w.set_mode(mode)
         sa = w.panels.currentWidget()
         width = sa.widget().minimumSizeHint().width()

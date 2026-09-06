@@ -499,6 +499,22 @@ class LiveStacker:
             self.ref_stars = fresh
         self._since_ref = 0
 
+    def preview_alignment(self, stars: StarField) -> register.Alignment | None:
+        """Alignment against the current reference, without accumulating.
+
+        Used to guide a manual recentring while integration is paused: unlike
+        `add()`, this never touches accum/weight, best_fwhm, _bg_history or
+        _since_ref — it only answers "how far is this frame from the
+        reference right now". Uses `min_matched_floor` rather than the usual
+        `min_matched`/`_relax` gate: while recentring, feedback should appear
+        as soon as there is any usable overlap, not at stacking rigour.
+        """
+        if not self.started or len(stars) < 3:
+            return None
+        return register.estimate(stars.xy, self.ref_stars.xy,
+                                 min_matched=self.min_matched_floor,
+                                 max_rms=self.max_rms)
+
     def new_segment(self) -> None:
         """Mark a discontinuity: a platform reset, a manual recentring.
 

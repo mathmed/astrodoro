@@ -60,15 +60,23 @@ make gui            # or: astrodoro-gui
 
 The interface is organised by **task mode**, not by settings category: each
 phase of the night needs a different screen, and the mode rearranges both sides.
-The first three modes are the phases of a night; the fourth holds what you set
-once and then forget.
+The first three modes are the phases of a deep-sky night and the fourth is the
+handful of targets that play by different rules. There is no fifth: what you set once
+and then forget is not a phase of anything, so it lives in a window of its own.
 
 | mode | key | panel | in the place of the image |
 | --- | --- | --- | --- |
 | Frame | `1` | phone sensor, which star to align on, camera source | live frame; target direction and objects in the field below |
 | Targets | `2` | hour, filters, target by name | the ranked list, with why each object scored what it did |
-| Integrate | `3` | stretch, per-channel gain, gradient, stacking, dark, flat, recording | stack; histogram and residual rotation below |
-| Config | `4` | folders, observing site, optics, language, display | full-width histogram |
+| Integrate | `3` | stretch, per-channel gain, stacking, bias/dark/flat, recording, platform alignment | stack; histogram and residual rotation below |
+| Moon & planets | `4` | which body, where it is, exposure guard, burst, linear view | live frame; histogram, frame quality and the ephemeris below |
+
+Above the vitals bar sits a **top bar** with what belongs to no phase: night
+mode (`N`), image only (`F`), the log (`L`), and **config** (`⌘,`) — folders,
+observing site, optics and language, in a window that opens over the image
+without touching the mode, the view or the running session. The three toggles
+stayed on the bar rather than inside that window because they are the ones you
+touch in the dark, mid-session.
 
 Focusing is not a mode: the **loupe** (`Z`, or the button on the image bar) is a
 5x view of a star that floats over the frame in any mode, with the HFR, the
@@ -76,9 +84,110 @@ session best and the beep. Focus is not a phase of the night — it is something
 you redo whenever the temperature drifts, in the middle of whatever you were
 doing. Click the image to pin the loupe to a particular star.
 
+### The Moon and the planets
+
+They invert every assumption the rest of the program is built on, so they get a
+mode instead of a checkbox. They are magnitudes brighter than anything else in
+the sky, which puts the exposure in milliseconds and makes saturation — not
+noise — the thing that ruins a frame; there are no stars in the field to
+register on, so there is nothing to stack live; and the limit on detail is the
+atmosphere, which means **lucky imaging**: a few hundred short frames of which
+the sharpest percent are stacked afterwards, elsewhere.
+
+The Moon and Jupiter differ in one number and not in kind: how much of the frame
+the body is. The Moon fills a third of a bin1 frame, Jupiter two hundredths of a
+percent of it, and everything downstream — the exposure, where the measurements
+are taken, what the stack is made of — follows from that. So the body is a combo
+at the top of the panel and not a second mode. The Sun is deliberately absent:
+nothing here can know whether there is a filter on the tube.
+
+So **Moon & planets** stacks nothing. What it does instead:
+
+- **Points at it.** These are the targets no catalogue carries. One button makes
+  the selected body the target and hands it to the same push-to arrow as
+  everything else, recomputing its position every minute — the Moon moves its
+  own diameter in an hour. The phase comes from the phase angle at the body and
+  not from the elongation seen from here: for Venus the two differ by half a
+  disc.
+- **Measures inside a window on the body, not over the frame.** The exposure
+  guard and the focus metric are both statements about the body, and a frame is
+  mostly sky: over the whole of it a planet reads as an empty frame with the
+  contrast of noise. The window's size is settled once and only its centre
+  follows the body afterwards.
+- **Holds the body still on screen.** At the magnification a planet needs, wind
+  and seeing walk it across a quarter of the screen, which makes judging focus
+  by eye impossible and reads as a mount problem. The view follows the body
+  instead: the image does not move, the window onto it does. Display only — the
+  burst is recorded raw and the stack aligns it afterwards.
+- **Scales the exposure between bodies.** One number is kept true — the Moon's —
+  and the rest is the ratio of surface brightnesses. Where that asks for more
+  than 20 ms it stops and says so: past that the frame averages two atmospheres
+  instead of freezing one, and lucky imaging has nothing sharp left to pick.
+- **Guards the exposure.** The peak and the clipped fraction are measured on the
+  raw mosaic, before demosaicing, because saturation happens per photosite and
+  mixing three colours hides the channel that went over. It says how much to
+  scale the exposure by, and one button applies it. A clipped crater floor is
+  gone for good — no amount of stacking afterwards brings it back.
+- **Focuses on contrast.** With no stars there is no HFR, so the vitals bar
+  switches to gradient contrast: normalised so that turning up the gain does not
+  read as better focus, and compared against the session's sharpest. The loupe
+  and the focus beep work unchanged.
+- **Records bursts.** Every frame straight to its own session folder, bounded by
+  seconds or by frames, stopping on its own. Each frame carries its measured
+  sharpness in the FITS header (`SHARPNS`), so picking the good ones later is
+  not measuring everything again. `R` starts and stops one.
+- **Stacks them afterwards.** `astrodoro lucky <folder>` ranks the burst by that
+  recorded sharpness — a header read per frame instead of a gigabyte — keeps the
+  sharpest quarter, crops each frame to a window it finds by the body's own
+  centroid, and aligns them by phase correlation, translation only. It is
+  offline because lucky imaging chooses frames by comparing them against each
+  other, and the sharpest frame of a burst may be the last one. The deep-sky
+  stacker cannot do this at all: it registers on asterisms, and such a burst
+  goes in and comes out rejected, every frame, for having fewer than three
+  stars.
+- **Shows it linearly.** A white point and a gamma, no autostretch: the deep-sky
+  stretch renormalises every frame, which makes the disc pulse on screen exactly
+  while you are trying to judge focus by eye.
+
 Other keys: `V` toggles stack/frame, `M` the sky map, `Z` the loupe, `F` image
-only, `N` night mode, `L` the log, `space` marks a new segment, `Esc` leaves a
-frame review, `Ctrl+S` saves what is on screen.
+only, `N` night mode, `L` the log, `space` marks a new segment, `R` records a
+burst, `Esc` leaves a frame review, `Ctrl+S` saves what is on screen.
+
+### Calibration
+
+Three masters, each removing something different, and all three recordable
+**mid-session** from the Integrate panel — which is the point: a master has to
+match the frames it corrects, and mid-session the gain, offset, bin and
+temperature already do by construction. Recording one pauses nothing else; the
+new master is loaded the moment it is written.
+
+| master | what it removes | what it must match | recorded with |
+| --- | --- | --- | --- |
+| bias | the offset pedestal and the read pattern | gain, offset, bin | the shortest exposure the camera does (36 µs), sensor capped |
+| dark | the pedestal **plus** the thermal signal of one exposure | gain, offset, bin, exposure, temperature | the session's own exposure, sensor capped |
+| flat | vignetting, dust, the channel response difference | bin (and in practice the optical train) | an evenly illuminated surface near half scale |
+
+**A dark and a bias are never both subtracted.** A dark is taken at the lights'
+exposure with the sensor capped, so it already contains the pedestal a bias
+measures; subtracting both takes it off twice and the sky goes negative. So the
+dark is used when there is one and the bias is what serves when there is not —
+`calibration.calibrate` decides, the panel says which is in force, and
+`tests/test_calibration.py` holds the rule.
+
+The bias is not a lesser dark, either: it is what a **flat** has to have
+subtracted. A flat is milliseconds long, so the session's five-second dark
+carries thermal signal the flat never collected, and subtracting it digs a hole
+in the correction. Left uncorrected, the pedestal turns an additive offset into
+a multiplicative one: on this camera's 500 ADU pedestal and a flat at 20000
+ADU, the corrected light keeps 2.4% of the vignetting it was supposed to lose
+(0.00% with the bias subtracted).
+
+A master is always the **median** of N frames: a mean keeps a cosmic ray or a
+satellite trail at 1/N of its brightness, and a master is exactly the frame that
+must not have any. The file name carries what it has to match
+(`dark_g250_o20_e5.00s_bin2_-10C.fits`), the geometry is refused outright when it
+does not, and everything else — gain, offset, exposure, temperature — is a
+warning in the log with the number in it.
 
 ### Which star to align on
 
@@ -147,10 +256,14 @@ that is literally the process running — see
 ### Command line
 
 ```bash
+astrodoro bias  --gain 250 --offset 20 --frames 30
 astrodoro dark  --exp 5 --gain 250 --frames 20 --target-temp -10
-astrodoro flat  --exp 0.5 --gain 250 --dark ~/Astrodoro/darks/dark_g250....fits
-astrodoro run   --exp 5 --gain 250 --dark ~/Astrodoro/darks/dark_g250....fits
+astrodoro flat  --exp 0.5 --gain 250 --bias ~/Astrodoro/bias/bias_g250_o20_bin2.fits
+astrodoro run   --exp 5 --gain 250 --dark ~/Astrodoro/darks/dark_g250....fits \
+                --flat ~/Astrodoro/flats/flat_g250_bin2.fits
 astrodoro replay ~/Astrodoro/sessions/2026-08-18/2130_M8
+astrodoro lucky ~/Astrodoro/sessions/2026-08-18/2210_Moon --best 25 --sharpen 0.6
+astrodoro lucky ~/Astrodoro/sessions/2026-08-18/2310_Jupiter --crop 400
 astrodoro info | usb | bench | tec | sensor
 astrodoro catalog                  # download the deep-sky catalogue
 astrodoro settings --set capture_dir /Volumes/data/astro
@@ -167,10 +280,10 @@ Nothing is written into the repository. By default:
     subs/sub_00001.fits ...   RICE-compressed raw subs
     session.json              settings, target, statistics
     stack.fits, stack_final.fits, previews
-~/Astrodoro/darks/  ~/Astrodoro/flats/  ~/Astrodoro/exports/
+~/Astrodoro/bias/  ~/Astrodoro/darks/  ~/Astrodoro/flats/  ~/Astrodoro/exports/
 ```
 
-All four folders are configurable — **Config → folders** in the GUI, or
+All five folders are configurable — **config → folders** in the GUI, or
 `astrodoro settings --set capture_dir ...`. Settings live in a JSON file outside
 the project (`~/Library/Application Support/astrodoro/settings.json` on macOS);
 `astrodoro settings` prints the path and every value.
@@ -178,7 +291,7 @@ the project (`~/Library/Application Support/astrodoro/settings.json` on macOS);
 ## Language
 
 The interface ships in **English** and **Brazilian Portuguese**, switchable in
-**Config → display** (or `astrodoro --lang pt_BR`). Adding a language means
+**config → display** (or `astrodoro --lang pt_BR`). Adding a language means
 copying one `.po` file and translating it — no build step, no system gettext.
 See [CONTRIBUTING.md](CONTRIBUTING.md#translations).
 
@@ -211,7 +324,8 @@ make handset    # in another
 ```
 src/astrodoro/
 ├── core/         frame pipeline: calibration → stars → registration → stacking,
-│                 plus the target ranking (tonight.py)
+│                 plus the target ranking (tonight.py) and the lucky-imaging
+│                 path (lucky.py), which branches out before star detection
 ├── pointing/     where the tube points: phone server, orientation, sky data
 ├── drivers/      camera drivers (svbony); nothing above here talks to an SDK
 ├── ui/           Qt interface: window, capture thread, design system, sky map
@@ -249,15 +363,40 @@ camera, each able to corrupt a stack silently. Read it before touching
 - **bin3/bin4 clip the highlights — use bin2**; and binning does not speed
   anything up.
 
+## Aligning the platform
+
+The residual rotation of the field is not only a budget for how long you can
+integrate — it is a measurement of the polar alignment itself. The sky turns
+about the pole, the platform turns the tube about its own axis, and the part of
+the difference that lies **along** the line of sight rotates the field at
+`sidereal rate x (error . direction)`: a signed number, needing no plate solve.
+One field gives the error along that direction, two far enough apart give all of
+it, and `core/polar.py` turns it into "raise the platform 27', rotate 14' east".
+
+The procedure is explicit — a window opened from the platform card in Integrate,
+which stays on screen while you go back to Frame to point at the next field. It
+measures on the star lists the capture already produces: nothing is recorded and
+no platform travel is spent. Five minutes on a field resolves an error of about
+a quarter of a degree, ten minutes under a tenth; on a platform set by eye,
+which starts one to three degrees out, every degree removed multiplies the
+integration the stack can take before the corners trail.
+
+Two caveats it tells you about itself. Two fields close together on the sky
+cannot separate altitude from azimuth, so the window says where to point next.
+And the sign depends on how many mirrors your light bounces off: correct, then
+measure a field a second time — if the residual rotation *grew*, invert the
+image parity and the setting sticks for good.
+
 ## No plate solving
 
 There used to be a plate solver (a wrapper over astrometry.net and ASTAP) and it
 was removed deliberately: a blind search takes minutes and is no use for finding
 a target, which is what this screen is for. The phone sensor answers where the
-tube points. Two consequences remain: `core/polar.py` is still correct but has
-no position source in the interface, and object annotation over the image went
-with it — with no WCS there is no field orientation. In its place, the context
-panel lists what falls inside a circle the size of the frame.
+tube points. Two consequences remain: `core/polar.py`'s way in from solved
+positions has no caller — the alignment above reaches the same axis from the
+field rotation instead — and object annotation over the image went with it: with
+no WCS there is no field orientation. In its place, the context panel lists what
+falls inside a circle the size of the frame.
 
 ## Contributing
 

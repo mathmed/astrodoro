@@ -47,7 +47,7 @@ def test_the_hour_angle_formula_agrees_with_astropy():
     ra = np.array([270.9, 201.36, 83.82, 10.68, 45.0])
     dec = np.array([-24.38, -43.02, -5.39, 41.27, -70.0])
 
-    alt, az, _ha = tonight._horizon(ra, dec, LAT, s.lst_deg)
+    alt, az, _ha = tonight.horizon(ra, dec, LAT, s.lst_deg)
     v = sky_vectors(ra, dec, LAT, LON, when=when)
     alt_ref = np.degrees(np.arcsin(np.clip(v[:, 2], -1, 1)))
     az_ref = np.degrees(np.arctan2(v[:, 0], v[:, 1])) % 360.0

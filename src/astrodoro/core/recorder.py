@@ -4,13 +4,17 @@ Recording the subs is the safety net and, more than that, it is what allows
 reprocessing a session afterwards and replaying it through `ReplaySource` to
 develop in daylight. RICE compression is lossless and halves the volume or
 better.
+
+Two shapes of session, on the same writer: a deep-sky run, where the subs are a
+by-product of a stack that grows for hours, and a `Burst`, where the frames on
+disk *are* the result and the run is over in half a minute.
 """
 from __future__ import annotations
 
 import json
 import shutil
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -110,7 +114,8 @@ class Recorder:
         p.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
     # ------------------------------------------------------------------- subs
-    def write_sub(self, raw: np.ndarray, meta: FrameMeta) -> Path | None:
+    def write_sub(self, raw: np.ndarray, meta: FrameMeta,
+                  extra: dict | None = None) -> Path | None:
         if not self.save_subs or not self.session_dir:
             return None
         if self.every > 1 and (meta.index - 1) % self.every:
@@ -144,6 +149,8 @@ class Recorder:
                                         time.gmtime(meta.timestamp))
         if self.target:
             hdr["OBJECT"] = self.target
+        for key, value in (extra or {}).items():
+            hdr[key] = value
 
         path = self.session_dir / "subs" / f"sub_{meta.index:05d}.fits"
         if self.compress:
@@ -217,3 +224,68 @@ def _slug(s: str) -> str:
     while "--" in out:
         out = out.replace("--", "-")
     return out[:40]
+
+
+@dataclass
+class Burst:
+    """A bounded run of frames written as fast as they arrive.
+
+    This is what a lunar or planetary session records instead of a stack.
+    Nothing accumulates: the frames go straight to disk and the sharpest few
+    percent are picked later, in a program built for lucky imaging. The measured
+    sharpness of each frame travels in its header (`SHARPNS`) so that picking
+    does not mean re-measuring everything.
+
+    Bounded because at short exposures frames arrive tens per second and an
+    unattended run fills the disk in minutes — by frames or by seconds,
+    whichever comes first, with 0 meaning "no limit of that kind".
+
+    Each burst is its own session folder, so `astrodoro replay` opens one
+    directly, and the frames are renumbered from 1: the camera's running index
+    is at 2841 by the third burst of the night, and a folder whose first file is
+    `sub_02841.fits` reads as a folder with 2840 files missing.
+    """
+
+    recorder: Recorder
+    max_frames: int = 0
+    max_seconds: float = 0.0
+    n: int = 0
+    _t0: float = 0.0
+
+    def begin(self, info: dict, cfg: dict) -> Path:
+        self._t0 = time.time()
+        return self.recorder.begin(info, dict(cfg, kind="burst"))
+
+    @property
+    def session_dir(self) -> Path | None:
+        return self.recorder.session_dir
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self._t0 if self._t0 else 0.0
+
+    @property
+    def done(self) -> bool:
+        if self.max_frames and self.n >= self.max_frames:
+            return True
+        return bool(self.max_seconds) and self.elapsed >= self.max_seconds
+
+    @property
+    def progress(self) -> float:
+        """How far along, 0..1, on whichever limit is set. 0 when neither is."""
+        by_frames = self.n / self.max_frames if self.max_frames else 0.0
+        by_time = self.elapsed / self.max_seconds if self.max_seconds else 0.0
+        return float(min(max(by_frames, by_time), 1.0))
+
+    def write(self, raw: np.ndarray, meta: FrameMeta,
+              sharpness: float | None = None) -> Path | None:
+        self.n += 1
+        extra = ({"SHARPNS": (round(float(sharpness), 4), "gradient contrast")}
+                 if sharpness is not None else None)
+        return self.recorder.write_sub(raw, replace(meta, index=self.n), extra)
+
+    def end(self) -> dict:
+        stats = {"frames": self.n, "seconds": round(self.elapsed, 1),
+                 "fps": round(self.n / self.elapsed, 2) if self.elapsed else 0.0}
+        self.recorder.end(stats)
+        return stats

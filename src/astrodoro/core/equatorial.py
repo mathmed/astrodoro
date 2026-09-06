@@ -30,6 +30,33 @@ class Fit:
         return self.n >= 8 and self.span_s >= 90 and self.r2 >= 0.5
 
 
+def fit_rate(times: list[float], values: list[float]) -> Fit:
+    """Least-squares rate of `values` against `times`, in units per minute.
+
+    Shared with `platform_align`, which fits the same shape of data — a
+    rotation angle against a timestamp — over a whole measurement instead of a
+    sliding window.
+    """
+    if len(times) < 4:
+        return Fit(float("nan"), 0.0, len(times), 0.0)
+    t = np.asarray(times, dtype=float)
+    v = np.asarray(values, dtype=float)
+    m = np.isfinite(v)
+    if m.sum() < 4:
+        return Fit(float("nan"), 0.0, int(m.sum()), 0.0)
+    t, v = t[m], v[m]
+    t = (t - t[0]) / 60.0                      # minutes
+    span = float(t[-1] * 60.0)
+    if t[-1] <= 1e-6:
+        return Fit(float("nan"), 0.0, len(t), span)
+    a, b = np.polyfit(t, v, 1)
+    pred = a * t + b
+    ss_res = float(((v - pred) ** 2).sum())
+    ss_tot = float(((v - v.mean()) ** 2).sum())
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    return Fit(float(a), float(np.clip(r2, 0.0, 1.0)), len(t), span)
+
+
 class PlatformMonitor:
     def __init__(self, window_minutes: float = 12.0):
         self.window_s = window_minutes * 60.0
@@ -69,24 +96,7 @@ class PlatformMonitor:
 
     # ------------------------------------------------------------------- fits
     def _fit(self, values: list[float]) -> Fit:
-        if len(self._t) < 4:
-            return Fit(float("nan"), 0.0, len(self._t), 0.0)
-        t = np.asarray(self._t, dtype=float)
-        v = np.asarray(values, dtype=float)
-        m = np.isfinite(v)
-        if m.sum() < 4:
-            return Fit(float("nan"), 0.0, int(m.sum()), 0.0)
-        t, v = t[m], v[m]
-        t = (t - t[0]) / 60.0                      # minutes
-        span = float(t[-1] * 60.0)
-        if t[-1] <= 1e-6:
-            return Fit(float("nan"), 0.0, len(t), span)
-        a, b = np.polyfit(t, v, 1)
-        pred = a * t + b
-        ss_res = float(((v - pred) ** 2).sum())
-        ss_tot = float(((v - v.mean()) ** 2).sum())
-        r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
-        return Fit(float(a), float(np.clip(r2, 0.0, 1.0)), len(t), span)
+        return fit_rate(self._t, values)
 
     def rotation_fit(self) -> Fit:
         """Residual rotation in degrees per minute.

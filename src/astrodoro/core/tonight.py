@@ -195,6 +195,19 @@ class Suggestion:
 
 
 # ------------------------------------------------------------------- the sky
+def lst_at(longitude: float, when=None) -> float:
+    """Apparent local sidereal time in degrees.
+
+    On its own because it is the cheap half of `sky_at`: what anchors a
+    position to the sky at an instant, without the Sun and Moon ephemerides.
+    """
+    from astropy import units as u
+    from astropy.time import Time
+
+    t = Time(when) if when is not None else Time.now()
+    return float(t.sidereal_time("apparent", longitude=longitude * u.deg).deg)
+
+
 def sky_at(latitude: float, longitude: float, when: datetime | None = None,
            elevation_m: float = 0.0) -> Sky:
     """Sidereal time, Sun and Moon for one instant at one site."""
@@ -206,7 +219,7 @@ def sky_at(latitude: float, longitude: float, when: datetime | None = None,
     site = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg,
                          height=elevation_m * u.m)
     frame = AltAz(obstime=t, location=site)
-    lst = t.sidereal_time("apparent", longitude=longitude * u.deg).deg
+    lst = lst_at(longitude, t)
 
     sun = get_body("sun", t, location=site)
     moon = get_body("moon", t, location=site)
@@ -217,7 +230,7 @@ def sky_at(latitude: float, longitude: float, when: datetime | None = None,
 
     return Sky(
         when=(t.to_datetime() if when is None else when),
-        lst_deg=float(lst),
+        lst_deg=lst,
         sun_alt=float(sun.transform_to(frame).alt.deg),
         moon_alt=float(moon.transform_to(frame).alt.deg),
         moon_ra=float(moon.ra.deg), moon_dec=float(moon.dec.deg),
@@ -258,7 +271,7 @@ def rank(objs: list[Obj], sky: Sky, latitude: float,
     if not keep.any():
         return []
 
-    alt, az, ha = _horizon(ra, dec, latitude, sky.lst_deg)
+    alt, az, ha = horizon(ra, dec, latitude, sky.lst_deg)
     keep &= alt >= min_alt
     if not keep.any():
         return []
@@ -332,7 +345,7 @@ def rank(objs: list[Obj], sky: Sky, latitude: float,
 
 
 # ------------------------------------------------------------------ the maths
-def _horizon(ra: np.ndarray, dec: np.ndarray, lat: float,
+def horizon(ra: np.ndarray, dec: np.ndarray, lat: float,
              lst_deg: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Altitude, azimuth and hour angle, all in degrees.
 

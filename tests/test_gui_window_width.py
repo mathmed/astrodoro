@@ -66,7 +66,7 @@ def _min_width(w) -> int:
 def test_switching_modes_does_not_widen_the_window(window):
     w = window
     base = _min_width(w)
-    for mode in ("frame", "targets", "stack", "config", "frame"):
+    for mode in ("frame", "targets", "stack", "lucky", "frame"):
         w.rail.select(mode)
         assert _min_width(w) == base, f"the {mode} mode widened the window"
     for view in ("map", "targets", "stack"):

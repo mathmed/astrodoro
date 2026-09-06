@@ -335,6 +335,16 @@ class Camera:
         self.set(Control.EXPOSURE, int(round(seconds * 1e6)))
 
     @property
+    def min_exposure(self) -> float:
+        """Shortest exposure this camera accepts, in seconds — 36 us here.
+
+        What defines a bias frame: short enough that no thermal signal
+        accumulates, so what is left is the offset pedestal and the read noise.
+        """
+        info = self.controls.get(int(Control.EXPOSURE))
+        return (info.min / 1e6) if info is not None else 1e-4
+
+    @property
     def offset(self) -> int:
         return self.get(Control.BLACK_LEVEL)[0]
 
@@ -357,6 +367,18 @@ class Camera:
     @target_temperature.setter
     def target_temperature(self, celsius: float) -> None:
         self.set(Control.TARGET_TEMPERATURE, int(round(celsius * 10)))
+
+    @property
+    def max_target_temperature(self) -> float:
+        """Warmest setpoint the SDK accepts, in Celsius — fixed regardless of
+        ambient, so on a hot night the sensor can already be above it."""
+        info = self.controls.get(int(Control.TARGET_TEMPERATURE))
+        return (info.max / 10.0) if info is not None else 30.0
+
+    @property
+    def min_target_temperature(self) -> float:
+        info = self.controls.get(int(Control.TARGET_TEMPERATURE))
+        return (info.min / 10.0) if info is not None else -40.0
 
     @property
     def cooler(self) -> bool:

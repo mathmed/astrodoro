@@ -14,10 +14,10 @@ pointed wherever it fits.
 In the southern hemisphere it matters even more: Sigma Octantis is magnitude 5.4
 and invisible from an urban sky, so aligning by eye on the pole is out.
 
-Note: with the plate solver removed there is no source of solved positions in
-the interface, so this module is currently unused by the GUI. It is kept
-because it is correct and cheap, and because a future position source (a solver,
-or a good enough sensor model) makes it immediately useful again.
+With the plate solver removed nothing in the interface produces solved
+positions, so `analyse` has no caller there. The second half of the module does:
+`correction` turns an axis into the two screw movements, and `platform_align`
+arrives at an axis from the residual field rotation instead of from positions.
 """
 from __future__ import annotations
 
@@ -79,23 +79,26 @@ def fit_rotation_axis(vectors: np.ndarray,
     return n, rms
 
 
-def analyse(radecs: list[tuple[float, float]], latitude: float,
-            longitude: float, when, elevation_m: float = 0.0) -> PolarResult:
-    """From a list of solved (RA, Dec) comes the platform correction.
+def correction(axis: np.ndarray, latitude: float, longitude: float, when,
+               elevation_m: float = 0.0, n_points: int = 0,
+               rms_deg: float = 0.0) -> PolarResult:
+    """Mechanical correction that brings `axis` onto the visible pole.
 
-    `when` is the mean instant of the observations (datetime or astropy Time).
-    The instant matters: the axis is measured in equatorial coordinates but the
-    correction you apply is mechanical, in the local frame, and the conversion
-    between the two depends on sidereal time.
+    `axis` is the platform's rotation axis as a unit vector in equatorial
+    coordinates, pointing at the hemisphere's own pole. `when` is the instant
+    the correction is applied (datetime or astropy Time), and it matters: the
+    axis is measured in equatorial coordinates but the screws you turn are in
+    the local frame, and the conversion between the two depends on sidereal
+    time.
+
+    Shared by the two ways of arriving at an axis — `analyse` from solved
+    positions, `platform_align` from the residual field rotation.
     """
     from astropy import units as u
     from astropy.coordinates import AltAz, EarthLocation, SkyCoord
     from astropy.time import Time
 
     south = latitude < 0
-    vecs = radec_to_vec(np.array([r for r, _ in radecs]),
-                        np.array([d for _, d in radecs]))
-    axis, rms = fit_rotation_axis(vecs, expect_south=south)
     ra, dec = vec_to_radec(axis)
 
     site = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg,
@@ -112,17 +115,31 @@ def analyse(radecs: list[tuple[float, float]], latitude: float,
     alt_err = float(axis_h.alt.deg - pole_h.alt.deg)
     az_err = float(((axis_h.az.deg - pole_h.az.deg + 180.0) % 360.0) - 180.0)
     total = float(np.degrees(np.arccos(np.clip(
-        np.dot(axis, radec_to_vec(np.array([0.0]),
-                                  np.array([pole_dec]))[0]), -1, 1))))
+        np.dot(axis / np.linalg.norm(axis),
+               radec_to_vec(np.array([0.0]), np.array([pole_dec]))[0]),
+        -1, 1))))
 
     res = PolarResult(
         axis_ra=ra, axis_dec=dec, total_error_deg=total,
         alt_error_deg=alt_err, az_error_deg=az_err,
-        n_points=len(radecs), rms_deg=rms,
+        n_points=n_points, rms_deg=rms_deg,
         hemisphere="south" if south else "north",
     )
     res.advice = _advice(res)
     return res
+
+
+def analyse(radecs: list[tuple[float, float]], latitude: float,
+            longitude: float, when, elevation_m: float = 0.0) -> PolarResult:
+    """From a list of solved (RA, Dec) comes the platform correction.
+
+    `when` is the mean instant of the observations.
+    """
+    vecs = radec_to_vec(np.array([r for r, _ in radecs]),
+                        np.array([d for _, d in radecs]))
+    axis, rms = fit_rotation_axis(vecs, expect_south=latitude < 0)
+    return correction(axis, latitude, longitude, when, elevation_m,
+                      n_points=len(radecs), rms_deg=rms)
 
 
 def _advice(r: PolarResult) -> str:

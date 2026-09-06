@@ -132,6 +132,10 @@ def stylesheet(p: Palette, large_targets: bool = False) -> str:
     declared only on the root, on cards and on input fields.
     """
     pad = "9px 14px" if large_targets else "5px 11px"
+    # The borderless buttons need their own padding — they are the top bar and
+    # the loupe's close, and at the ordinary button's padding they would read as
+    # buttons again.
+    ghost = "8px 12px" if large_targets else "4px 9px"
     ctrl = "6px" if large_targets else "4px"
     bar = "12px" if large_targets else "9px"
     return f"""
@@ -152,8 +156,10 @@ QPushButton:checked {{ background: {p.accent}; border-color: {p.accent};
                        color: {p.bg}; }}
 QPushButton#mode {{ text-align: left; padding: 11px 14px; font-weight: 600; }}
 QPushButton#ghost {{ background: transparent; border: none; color: {p.text_dim};
-                     padding: 2px 6px; }}
+                     padding: {ghost}; }}
 QPushButton#ghost:hover {{ color: {p.text}; }}
+QPushButton#ghost:checked {{ background: {p.surface2}; border-radius: 5px;
+                             color: {p.accent}; }}
 
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit {{
     background: {p.bg}; border: 1px solid {p.border}; border-radius: 4px;

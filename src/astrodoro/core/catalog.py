@@ -27,6 +27,8 @@ TYPE_LABELS = {
     "*": N_("star"), "**": N_("double star"),
     "*Ass": N_("stellar association"), "Nova": N_("nova"),
     "NonEx": N_("nonexistent"), "Other": N_("other"),
+    # Not in any catalogue: what `core/lucky.py` hands to push-to.
+    "Moon": N_("Moon"), "Planet": N_("planet"),
 }
 INTERESTING = {"G", "GPair", "GTrpl", "GGroup", "GCl", "OCl", "Cl+N", "PN",
                "HII", "Neb", "RfN", "EmN", "SNR"}

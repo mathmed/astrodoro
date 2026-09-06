@@ -1,6 +1,8 @@
 """Headless capture: calibration masters, a live stacking session, and replay.
 
+    astrodoro bias --gain 250 --frames 30
     astrodoro dark --exp 5 --gain 250 --frames 20
+    astrodoro flat --gain 250 --exp 0.05 --bias ~/Astrodoro/bias/bias_g250_o20_bin2.fits
     astrodoro run  --exp 5 --gain 250 --dark ~/Astrodoro/darks/dark_g250.fits
     astrodoro replay ~/Astrodoro/sessions/2026-08-18/2130_M8
 
@@ -20,8 +22,8 @@ import cv2
 import numpy as np
 from astropy.io import fits
 
-from ..core import debayer, stretch
-from ..core.calibration import calibrate, hot_pixel_map
+from ..core import debayer, masters, stretch
+from ..core.calibration import calibrate, flat_master, hot_pixel_map, prepare_flat
 from ..core.recorder import read_fits
 from ..core.stacker import LiveStacker
 from ..drivers.svbony import Camera, list_cameras
@@ -97,6 +99,100 @@ class _Meta:
         self.full_scale = full_scale
 
 
+def grab(cam, n: int, report=None) -> list:
+    """N frames for a master, dropping the first: it was already being exposed
+    when the parameters were set, so it belongs to the previous state."""
+    cam.start_video()
+    frames = []
+    for k in range(n + 1):
+        try:
+            f = cam.read_frame(timeout=cam.exposure * 3 + 8)
+        except SVBError as e:
+            print(f"  frame {k}: {e}")
+            continue
+        if k == 0:
+            continue
+        frames.append(f)
+        if report is not None:
+            report(f, len(frames))
+        else:
+            print(f"  {len(frames)}/{n}  median={np.median(f):.0f} "
+                  f"max={f.max()}", end="\r")
+    cam.stop_video()
+    print()
+    return frames
+
+
+def load_masters(args, shape=None) -> tuple:
+    """(bias, dark, flat, hot) from whatever the command line offered.
+
+    The bias is loaded even when a dark is: `calibrate` decides which of the two
+    to subtract, and saying here that a bias was given and then dropping it
+    would hide that decision from the one place it is visible.
+    """
+    bias = dark = flat = hot = None
+    if getattr(args, "bias", None):
+        bias = read_fits(args.bias)[0].astype(np.float32)
+        print(f"  bias: {args.bias} (median {np.median(bias):.0f})")
+    if getattr(args, "dark", None):
+        dark = read_fits(args.dark)[0].astype(np.float32)
+        print(f"  dark: {args.dark} (median {np.median(dark):.0f})")
+        if bias is not None:
+            print("  (the dark already contains the bias; the bias is not "
+                  "subtracted twice)")
+        hot_path = Path(str(args.dark).replace(".fits", "_hot.npy"))
+        if hot_path.exists():
+            hot = np.load(hot_path)
+            print(f"  hot pixel map: {hot.sum()} px")
+    if getattr(args, "flat", None):
+        raw = read_fits(args.flat)[0].astype(np.float32)
+        flat = prepare_flat(raw)
+        if flat is None:
+            print(f"  flat ignored (median <= 0): {args.flat}")
+        else:
+            print(f"  flat: {args.flat} (corner at {flat.min()*100:.0f}% of "
+                  f"the centre)")
+    if shape is not None:
+        for label, m in (("bias", bias), ("dark", dark), ("flat", flat)):
+            if m is not None and m.shape != shape:
+                sys.exit(f"{label} is {m.shape}, the frames are {shape} "
+                         f"(different bin?)")
+    return bias, dark, flat, hot
+
+
+# ----------------------------------------------------------------------- bias
+def cmd_bias(args) -> None:
+    """Master bias: the offset pedestal, at the shortest exposure the camera does.
+
+    It is what a flat has to have subtracted, and the pedestal to use when no
+    dark of the right exposure exists. Gain, offset and bin must match the
+    frames it will correct — the exposure is the one thing that must not.
+    """
+    out = Path(args.out).expanduser()
+    out.mkdir(parents=True, exist_ok=True)
+    cam = setup(args)
+    cam.exposure = cam.min_exposure
+    setup_ = masters.Setup.from_camera(cam)
+    print(f"\ncapturing {args.frames} bias frames of "
+          f"{setup_.exposure*1e6:.0f} us at gain {setup_.gain}, "
+          f"offset {setup_.offset}, bin{setup_.bin}")
+    print("CAP THE SENSOR and make sure the room is dark.")
+    input("Enter when it is capped: ")
+
+    frames = grab(cam, args.frames)
+    if len(frames) < 3:
+        sys.exit("not enough frames for a bias")
+    master = masters.combine(frames)
+    path = masters.write(out, "bias", master, setup_, len(frames))
+    print(f"master bias -> {path}")
+    print(f"  median {np.median(master):.1f} ADU  sigma {master.std():.2f} ADU"
+          f"  min {master.min():.0f}  max {master.max():.0f}")
+    if master.min() <= 0:
+        print("  warning: pixels at zero — the offset is truncating the left "
+              "tail of the noise; raise it (astrodoro sensor measures it)")
+    cam.close()
+
+
 # ----------------------------------------------------------------------- dark
 def cmd_dark(args) -> None:
     out = Path(args.out).expanduser()
@@ -131,47 +227,19 @@ def cmd_dark(args) -> None:
           f"{cam.exposure:.1f}s...")
     input("Enter when it is capped: ")
 
-    cam.start_video()
-    frames = []
-    for k in range(args.frames + 1):
-        try:
-            f = cam.read_frame(timeout=cam.exposure * 3 + 8)
-        except SVBError as e:
-            print(f"  frame {k}: {e}")
-            continue
-        if k == 0:
-            continue
-        frames.append(f)
-        print(f"  {len(frames)}/{args.frames}  median={np.median(f):.0f} "
-              f"max={f.max()}", end="\r")
-    cam.stop_video()
-    print()
+    frames = grab(cam, args.frames)
     if len(frames) < 3:
         sys.exit("not enough frames for a dark")
 
-    master = np.median(np.stack(frames), axis=0).astype(np.float32)
-    temp = cam.temperature if cam.supports_cooler else None
-    name = (f"dark_g{cam.gain}_o{cam.offset}_e{cam.exposure:.2f}s"
-            f"_bin{cam.geometry.bin}"
-            + (f"_{temp:+.0f}C" if temp is not None else "") + ".fits")
-    hdu = fits.PrimaryHDU(master)
-    hdu.header["IMAGETYP"] = "DARK"
-    hdu.header["EXPTIME"] = cam.exposure
-    hdu.header["GAIN"] = cam.gain
-    hdu.header["OFFSET"] = cam.offset
-    hdu.header["XBINNING"] = cam.geometry.bin
-    hdu.header["NCOMBINE"] = len(frames)
-    hdu.header["BAYERPAT"] = cam.bayer.fits_name
-    hdu.header["FULLSCAL"] = cam.full_scale
-    if temp is not None:
-        hdu.header["CCD-TEMP"] = round(temp, 2)
-    hdu.writeto(out / name, overwrite=True)
-    print(f"master dark -> {out / name}")
+    master = masters.combine(frames)
+    path = masters.write(out, "dark", master, masters.Setup.from_camera(cam),
+                         len(frames))
+    print(f"master dark -> {path}")
     print(f"  median {np.median(master):.1f}  sigma {master.std():.1f}  "
           f"max {master.max():.0f}")
 
     hot = hot_pixel_map(master)
-    np.save(out / name.replace(".fits", "_hot.npy"), hot)
+    np.save(path.with_name(path.name.replace(".fits", "_hot.npy")), hot)
     print(f"  hot pixel map: {hot.sum()} px ({100*hot.mean():.4f}%)")
     cam.close()
 
@@ -180,57 +248,47 @@ def cmd_dark(args) -> None:
 def cmd_flat(args) -> None:
     """Master flat: an evenly illuminated surface, the median of N frames.
 
-    Pass --dark of the same exposure and gain: the sensor's offset pedestal
-    would otherwise enter the flat as a multiplicative error.
+    Pass `--bias`, or a `--dark` of the flat's own exposure: the sensor's offset
+    pedestal would otherwise enter a multiplicative correction and flatten the
+    vignetting curve everywhere. A bias is the honest choice — a flat is
+    milliseconds long, and a dark of the session's exposure carries thermal
+    signal this frame never collected.
     """
     out = Path(args.out).expanduser()
     out.mkdir(parents=True, exist_ok=True)
     cam = setup(args)
-    dark = None
-    if args.dark:
-        dark, _hdr = read_fits(args.dark)
-        dark = dark.astype(np.float32)
-        print(f"flat dark: {args.dark} (median {np.median(dark):.0f})")
+    pedestal = None
+    if args.bias:
+        pedestal = read_fits(args.bias)[0].astype(np.float32)
+        print(f"flat bias: {args.bias} (median {np.median(pedestal):.0f})")
+    elif args.dark:
+        pedestal = read_fits(args.dark)[0].astype(np.float32)
+        print(f"flat dark: {args.dark} (median {np.median(pedestal):.0f})")
     else:
-        print("warning: without --dark, the offset pedestal is baked into the flat")
+        print("warning: without --bias or --dark, the offset pedestal is baked "
+              "into the flat")
 
     print(f"\ncapturing {args.frames} flats of {cam.exposure:.3f}s...")
-    cam.start_video()
-    frames = []
-    for k in range(args.frames + 1):
-        try:
-            f = cam.read_frame(timeout=cam.exposure * 3 + 8)
-        except SVBError as e:
-            print(f"  frame {k}: {e}")
-            continue
-        if k == 0:
-            continue
-        frames.append(f.astype(np.float32))
-        med = np.median(frames[-1])
-        print(f"  {len(frames)}/{args.frames}  median={med:.0f} "
+
+    def report(f, k):
+        med = np.median(f)
+        print(f"  {k}/{args.frames}  median={med:.0f} "
               f"({med/cam.full_scale*100:.0f}% of scale)"
               + ("  SATURATING" if f.max() >= cam.full_scale * 0.98 else ""),
               end="\r")
-    cam.stop_video()
-    print()
-    if not frames:
-        sys.exit("no flat captured")
 
-    master = np.median(np.stack(frames), axis=0)
-    if dark is not None and dark.shape == master.shape:
-        master = np.maximum(master - dark, 1.0)
+    frames = grab(cam, args.frames, report=report)
+    if len(frames) < 3:
+        sys.exit("not enough frames for a flat")
+
+    master = flat_master(frames, pedestal)
     m = float(np.median(master))
-    name = f"flat_g{cam.gain}_bin{cam.geometry.bin}.fits"
-    hdu = fits.PrimaryHDU(master.astype(np.float32))
-    hdu.header["IMAGETYP"] = "FLAT"
-    hdu.header["EXPTIME"] = cam.exposure
-    hdu.header["GAIN"] = cam.gain
-    hdu.header["XBINNING"] = cam.geometry.bin
-    hdu.header["NCOMBINE"] = len(frames)
-    hdu.header["BAYERPAT"] = cam.bayer.fits_name
-    hdu.writeto(out / name, overwrite=True)
+    if m <= 0:
+        sys.exit("invalid flat (median <= 0)")
+    path = masters.write(out, "flat", master, masters.Setup.from_camera(cam),
+                         len(frames))
     norm = master / m
-    print(f"master flat -> {out / name}")
+    print(f"master flat -> {path}")
     print(f"  median {m:.0f} ({m/cam.full_scale*100:.0f}% of scale)")
     print(f"  vignetting: corner at {norm.min()*100:.0f}% of the centre, "
           f"range {norm.min()*100:.0f}-{norm.max()*100:.0f}%")
@@ -260,17 +318,19 @@ def cmd_run(args) -> None:
     out.mkdir(parents=True, exist_ok=True)
     cam = setup(args)
 
-    dark = hot = None
-    if args.dark:
-        dark, _hdr = read_fits(args.dark)
-        dark = dark.astype(np.float32)
-        print(f"  dark: {args.dark} (median {np.median(dark):.0f})")
-        hot_path = Path(str(args.dark).replace(".fits", "_hot.npy"))
-        if hot_path.exists():
-            hot = np.load(hot_path)
-            print(f"  hot pixel map: {hot.sum()} px")
-
     g = cam.geometry
+    bias, dark, flat, hot = load_masters(args, shape=(g.height, g.width))
+    for label, path in (("bias", args.bias), ("dark", args.dark),
+                        ("flat", args.flat)):
+        if not path:
+            continue
+        try:
+            for warning in masters.mismatch(label, read_fits(path)[1],
+                                            masters.Setup.from_camera(cam)):
+                print(f"  warning: {warning}")
+        except (SVBError, OSError, ValueError):
+            pass
+
     st = LiveStacker((g.height, g.width), channels=3,
                      sigma_clip=args.sigma_clip,
                      # Saturation on the luminance scale, which sums the 2x2 quad.
@@ -303,7 +363,7 @@ def cmd_run(args) -> None:
             except queue.Empty:
                 continue
 
-            f = calibrate(raw, meta, dark=dark, hot=hot)
+            f = calibrate(raw, meta, dark=dark, flat=flat, hot=hot, bias=bias)
             rgb = debayer.to_rgb((f * 65535).astype(np.uint16), cam.bayer,
                                  quality="linear").astype(np.float32) / 65535.0
             lum = debayer.cfa_to_luminance(f)
@@ -349,11 +409,8 @@ def cmd_replay(args) -> None:
           f"Bayer {info['bayer']}  scale 0..{info['full_scale']}  "
           f"{info['n_frames']} frames")
 
-    dark = None
-    if args.dark:
-        dark, _hdr = read_fits(args.dark)
-        dark = dark.astype(np.float32)
-        print(f"dark: {args.dark}")
+    bias, dark, flat, _hot = load_masters(
+        args, shape=(info["height"], info["width"]))
 
     st = LiveStacker((info["height"], info["width"]), channels=3,
                      sigma_clip=args.sigma_clip, saturation=debayer.LUM_SUM)
@@ -365,7 +422,7 @@ def cmd_replay(args) -> None:
         if got is None:
             break
         raw, meta = got
-        f = calibrate(raw, meta, dark=dark)
+        f = calibrate(raw, meta, dark=dark, flat=flat, bias=bias)
         rgb = debayer.to_rgb((f * 65535).astype(np.uint16), meta.bayer,
                              quality="linear").astype(np.float32) / 65535.0
         o = st.add(rgb, debayer.cfa_to_luminance(f), exposure=meta.exposure,
@@ -398,6 +455,107 @@ def _write_preview(st: LiveStacker, out: Path, args,
         hdu.header["EXPTOTAL"] = st.total_exposure
         hdu.writeto(out / "stack_final.fits", overwrite=True)
         print(f"  -> {out/name}  and  {out/'stack_final.fits'}")
+
+
+# ------------------------------------------------------------------ lucky stack
+def cmd_lucky(args) -> None:
+    """Stack a burst of the Moon or a planet: rank by sharpness, align, average.
+
+    Offline and not live because lucky imaging picks frames by comparing them
+    against each other — the sharpest frame of the burst may be the last one.
+    See `core/lucky_stack.py` for why none of the deep-sky path applies.
+    """
+    from ..core import lucky_stack
+
+    folder = Path(args.folder).expanduser()
+    paths = lucky_stack.subs(folder)
+    if not paths:
+        print(f"no FITS files in {folder}")
+        return
+
+    bias, dark, flat, _hot = load_masters(args)
+    if dark is None:
+        # The lucky path never had a dark of its own exposure to offer: a burst
+        # runs at milliseconds, and the bias is the pedestal at any exposure.
+        dark = bias
+
+    print(f"{len(paths)} frames in {folder}")
+    ranked = lucky_stack.rank(paths)
+    measured = sum(1 for f in ranked if f.measured)
+    if measured:
+        # A burst this program recorded carries SHARPNS; anything else does not,
+        # and then ranking has to read every pixel of every frame.
+        print(f"  {measured} frames had no SHARPNS — measured them")
+    print(f"  sharpness {ranked[-1].sharpness:.1f} .. {ranked[0].sharpness:.1f}"
+          f"   best: {ranked[0].path.name}")
+
+    def show(done: int, total: int, name: str) -> None:
+        end = "\n" if done == total else "\r"
+        print(f"  aligning {done}/{total}  {name}", end=end, flush=True)
+
+    result = lucky_stack.stack(folder, best=args.best / 100.0,
+                               dark=dark, flat=flat,
+                               subtract_background=not args.no_background,
+                               sharpen_amount=args.sharpen,
+                               crop=_crop_arg(args.crop), progress=show)
+    out = Path(args.out).expanduser() if args.out else folder / "stack_lucky.fits"
+    lucky_stack.write(result, out, target=args.target)
+    if result.crop is not None:
+        print(f"  stacked a {result.crop.w}x{result.crop.h} px window on the "
+              f"body, not the whole frame")
+
+    png = out.with_suffix(".png")
+    disp = np.clip(result.stack / max(float(result.stack.max()), 1e-6), 0, 1)
+    disp = disp ** args.gamma
+    # Saturation on the PNG only: the FITS is what another program will work
+    # from, and it stays linear and untouched.
+    if abs(args.saturation - 1.0) > 1e-3:
+        disp = stretch.saturate(disp, args.saturation)
+    cv2.imwrite(str(png), cv2.cvtColor(stretch.to_uint8(disp),
+                                       cv2.COLOR_RGB2BGR))
+
+    if result.background is not None:
+        pedestal = np.atleast_1d(result.background)
+        print("  background removed: "
+              + "  ".join(f"{c}={v * 100:.2f}%"
+                          for c, v in zip("RGB", pedestal, strict=False)))
+    print(f"\n{result.n_used} of {result.n_total} frames "
+          f"({args.best:.0f}%), worst shift {result.max_shift:.1f} px, "
+          f"{result.seconds:.1f} s")
+    print(f"  -> {out}  and  {png}")
+
+
+# ------------------------------------------------------------- post-process
+def cmd_post(args) -> None:
+    """Post-process a linear stack: gradient, colour, optics, stretch.
+
+    Offline and by hand, the same way `moon` is: this runs once on a finished
+    `stack_final.fits`, never per frame. See `core/postprocess.py`.
+    """
+    from ..core import postprocess
+
+    fits_path = Path(args.fits).expanduser()
+    rgb = postprocess.load_linear(fits_path)
+    print(f"stack {rgb.shape[1]}x{rgb.shape[0]}")
+
+    img = postprocess.process(
+        rgb, crop=args.crop, mode=args.mode, tiles=args.tiles,
+        align=not args.no_align, match_psf_widths=args.match_psf,
+        color_method=args.color_method, color_aperture=args.color_aperture,
+        deconv_iters=args.deconv, target_bg=args.target_bg,
+        chroma_denoise=args.chroma_denoise, denoise=args.denoise,
+        saturation=args.saturation, log=lambda msg: print(f"  {msg}"),
+    )
+
+    out = (Path(args.out).expanduser() if args.out
+          else fits_path.with_name(fits_path.stem + "_post.png"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    encoded = (np.clip(img, 0, 1) * 65535.0 + 0.5).astype(np.uint16)
+    cv2.imwrite(str(out), encoded[:, :, ::-1])
+    jpg = out.with_suffix(".jpg")
+    cv2.imwrite(str(jpg), stretch.to_uint8(img)[:, :, ::-1],
+               [cv2.IMWRITE_JPEG_QUALITY, 95])
+    print(f"wrote {out}  and  {jpg}")
 
 
 # --------------------------------------------------------------- sensor survey
@@ -511,6 +669,21 @@ def cmd_sensor(args) -> None:
 
 
 # ------------------------------------------------------------------- argparse
+def _crop_arg(value: str) -> str | int:
+    """"auto" and "full" mean themselves; anything else is a width in pixels."""
+    if value in ("auto", "full"):
+        return value
+    try:
+        return int(value)
+    except ValueError:
+        return "auto"
+
+
+def lucky_stack_default() -> float:
+    from ..core.lucky_stack import DEFAULT_BEST
+    return DEFAULT_BEST * 100
+
+
 def add_parsers(sub) -> None:
     s = Settings.load()
 
@@ -535,6 +708,13 @@ def add_parsers(sub) -> None:
                         help="stretch linked across channels (keeps colour ratios)")
         return sp
 
+    b = common(sub.add_parser("bias", help="record a master bias"))
+    b.add_argument("--frames", type=int, default=30,
+                   help="more than a dark: a bias is cheap and its noise is "
+                        "what the median has to average down")
+    b.add_argument("--out", default=s.bias_dir)
+    b.set_defaults(fn=cmd_bias)
+
     d = common(sub.add_parser("dark", help="record a master dark"))
     d.add_argument("--frames", type=int, default=20)
     d.add_argument("--out", default=s.dark_dir)
@@ -542,13 +722,21 @@ def add_parsers(sub) -> None:
 
     fl = common(sub.add_parser("flat", help="record a master flat"))
     fl.add_argument("--frames", type=int, default=16)
+    fl.add_argument("--bias", default=None,
+                    help="master bias — the pedestal to remove from the flat")
     fl.add_argument("--dark", default=None,
-                    help="dark of the same exposure and gain")
+                    help="a dark of the flat's own exposure, if you have one; "
+                         "--bias is the usual answer")
     fl.add_argument("--out", default=s.flat_dir)
     fl.set_defaults(fn=cmd_flat)
 
     r = stacking(common(sub.add_parser("run", help="headless stacking session")))
+    r.add_argument("--bias", default=None,
+                   help="applied only when there is no --dark: a dark already "
+                        "contains the bias")
     r.add_argument("--dark", default=None)
+    r.add_argument("--flat", default=None,
+                   help="corrects vignetting; one per bin serves every gain")
     r.add_argument("--out", default=s.export_dir)
     r.add_argument("--ref-refresh", type=int, default=10)
     r.add_argument("--min-ref-stars", type=int, default=10,
@@ -562,9 +750,70 @@ def add_parsers(sub) -> None:
     rp.add_argument("folder")
     rp.add_argument("--speed", type=float, default=0.0,
                     help="0 = as fast as possible; 1 = real time")
+    rp.add_argument("--bias", default=None)
     rp.add_argument("--dark", default=None)
+    rp.add_argument("--flat", default=None)
     rp.add_argument("--out", default=s.export_dir)
     rp.set_defaults(fn=cmd_replay)
+
+    mn = sub.add_parser("lucky",
+                        help="stack a Moon or planet burst (sharpest frames, "
+                             "aligned)")
+    mn.add_argument("folder", help="a burst folder written by PLANETS")
+    mn.add_argument("--best", type=float, default=lucky_stack_default(),
+                    help="percent of the burst to keep, sharpest first")
+    mn.add_argument("--bias", default=None,
+                    help="stands in for the dark: a burst is milliseconds long")
+    mn.add_argument("--dark", default=None)
+    mn.add_argument("--flat", default=None,
+                    help="corrects vignetting; one per bin serves every gain")
+    mn.add_argument("--no-background", action="store_true",
+                    help="keep the additive pedestal (offset plus scattered "
+                         "light) instead of measuring and removing it")
+    mn.add_argument("--sharpen", type=float, default=0.0,
+                    help="unsharp mask amount, 0.5-1.0 is usual; off by "
+                         "default because it is a choice, not a correction")
+    mn.add_argument("--gamma", type=float, default=s.lucky_gamma,
+                    help="display exponent of the PNG; the FITS stays linear")
+    mn.add_argument("--saturation", type=float, default=1.0,
+                    help="chroma of the PNG only; 2-3 is the mineral Moon")
+    mn.add_argument("--crop", default="auto",
+                    help="auto: a window around the body, unless the body is "
+                         "most of the frame (the Moon); full: the whole frame; "
+                         "a number: that width in px, centred on the body")
+    mn.add_argument("--target", default="Moon")
+    mn.add_argument("--out", default=None,
+                    help="default: stack_lucky.fits inside the burst folder")
+    mn.set_defaults(fn=cmd_lucky)
+
+    pp = sub.add_parser("post",
+                        help="post-process a linear stack (gradient, colour, "
+                             "optics, stretch)")
+    pp.add_argument("fits", help="a stack_final.fits from run/replay")
+    pp.add_argument("--crop", type=int, default=-1,
+                    help="fixed border in px; -1 measures it from the noise")
+    pp.add_argument("--mode", choices=("divide", "subtract"), default="divide",
+                    help="gradient correction: multiplicative or additive")
+    pp.add_argument("--tiles", type=int, default=40)
+    pp.add_argument("--no-align", action="store_true",
+                    help="skip the atmospheric-dispersion channel alignment")
+    pp.add_argument("--match-psf", action="store_true",
+                    help="equalise the per-channel PSF width")
+    pp.add_argument("--color-method", choices=("median", "flux"),
+                    default="median",
+                    help="robust median of per-star ratios, or summed flux")
+    pp.add_argument("--color-aperture", type=int, default=3,
+                    help="radius in px for the colour-calibration photometry")
+    pp.add_argument("--deconv", type=int, default=0,
+                    help="RL iterations on the luminance, 0 = off")
+    pp.add_argument("--target-bg", type=float, default=0.25)
+    pp.add_argument("--chroma-denoise", type=float, default=2.0)
+    pp.add_argument("--denoise", type=float, default=0.0,
+                    help="luminance denoise strength on the sky, 0 = off")
+    pp.add_argument("--saturation", type=float, default=1.6)
+    pp.add_argument("--out", default=None,
+                    help="default: <fits>_post.png next to the input")
+    pp.set_defaults(fn=cmd_post)
 
     sn = common(sub.add_parser("sensor",
                                help="find the gain step and minimum offset"))

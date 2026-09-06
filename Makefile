@@ -5,16 +5,20 @@ GAIN    ?= 250
 BIN     ?= 2
 FRAMES  ?= 20
 TEMP    ?=
+BIAS    ?=
 DARK    ?=
+FLAT    ?=
 OUT     ?=
 FOLDER  ?=
 
 TEMPARG := $(if $(TEMP),--target-temp $(TEMP),)
+BIASARG := $(if $(BIAS),--bias $(BIAS),)
 DARKARG := $(if $(DARK),--dark $(DARK),)
+FLATARG := $(if $(FLAT),--flat $(FLAT),)
 OUTARG  := $(if $(OUT),--out $(OUT),)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup sdk catalog gui probe info usb bench tec dark flat \
+.PHONY: help setup sdk catalog gui probe info usb bench tec bias dark flat \
         run replay handset settings bundle brand test lint fmt i18n clean distclean
 
 help:  ## show this list
@@ -24,7 +28,7 @@ help:  ## show this list
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-11s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "variables:  EXP=$(EXP)  GAIN=$(GAIN)  BIN=$(BIN)  FRAMES=$(FRAMES)"
-	@echo "            TEMP=  DARK=  OUT=  FOLDER="
+	@echo "            TEMP=  BIAS=  DARK=  FLAT=  OUT=  FOLDER="
 	@echo "example:    make dark EXP=5 GAIN=250 TEMP=-10"
 
 # --------------------------------------------------------------------- setup
@@ -61,21 +65,25 @@ tec: ## monitor the cooler (TEMP=-10)
 sensor: ## find the gain step and the minimum offset (cap the sensor)
 	$(PY) -m astrodoro.cli sensor --bin $(BIN)
 
+bias: ## master bias (cap the sensor; the exposure is the camera's minimum)
+	$(PY) -m astrodoro.cli bias --gain $(GAIN) --bin $(BIN) \
+	  --frames $(FRAMES) $(OUTARG)
+
 dark: ## master dark (cap the sensor)
 	$(PY) -m astrodoro.cli dark --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
 	  --frames $(FRAMES) $(TEMPARG) $(OUTARG)
 
 flat: ## master flat (evenly illuminated surface)
 	$(PY) -m astrodoro.cli flat --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
-	  --frames $(FRAMES) $(DARKARG) $(OUTARG)
+	  --frames $(FRAMES) $(BIASARG) $(DARKARG) $(OUTARG)
 
 run: ## headless live stacking session
 	$(PY) -m astrodoro.cli run --exp $(EXP) --gain $(GAIN) --bin $(BIN) \
-	  $(DARKARG) $(OUTARG)
+	  $(BIASARG) $(DARKARG) $(FLATARG) $(OUTARG)
 
 replay: ## reprocess a recorded session (FOLDER=~/Astrodoro/sessions/...)
 	@test -n "$(FOLDER)" || { echo "usage: make replay FOLDER=~/Astrodoro/sessions/2026-08-18/2130_M8"; exit 1; }
-	$(PY) -m astrodoro.cli replay $(FOLDER) $(DARKARG) $(OUTARG)
+	$(PY) -m astrodoro.cli replay $(FOLDER) $(BIASARG) $(DARKARG) $(FLATARG) $(OUTARG)
 
 settings: ## show the stored settings
 	$(PY) -m astrodoro.cli settings

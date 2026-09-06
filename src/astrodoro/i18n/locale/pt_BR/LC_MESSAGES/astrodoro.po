@@ -10,19 +10,23 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: src/astrodoro/ui/worker.py:569
+#: src/astrodoro/ui/worker.py:730
 msgid "  flat {k}/{n} — median {pct:.0f}% of scale"
 msgstr "  flat {k}/{n} — mediana {pct:.0f}% da escala"
 
-#: src/astrodoro/ui/worker.py:581
-msgid "  session dark subtracted from the flat"
-msgstr "  dark da sessão subtraído do flat"
+#: src/astrodoro/ui/worker.py:744
+msgid "  warning: no bias or matching dark — the offset pedestal stays baked into the flat"
+msgstr "  aviso: sem bias nem dark compatível — o pedestal de offset fica embutido no flat"
 
-#: src/astrodoro/core/focus.py:105
+#: src/astrodoro/ui/worker.py:741
+msgid "  {source} subtracted from the flat"
+msgstr "  {source} subtraído do flat"
+
+#: src/astrodoro/core/focus.py:110 src/astrodoro/core/focus.py:260
 msgid " (getting worse)"
 msgstr " (piorando)"
 
-#: src/astrodoro/core/focus.py:103
+#: src/astrodoro/core/focus.py:108 src/astrodoro/core/focus.py:258
 msgid " (improving)"
 msgstr " (melhorando)"
 
@@ -34,163 +38,215 @@ msgstr " (perto do zênite: azimute instável, prefira corrigir a altitude)"
 msgid " (settling)"
 msgstr " (assentando)"
 
-#: src/astrodoro/ui/main.py:2706 src/astrodoro/ui/main.py:2760
+#: src/astrodoro/ui/main.py:1625
+msgid " min"
+msgstr " min"
+
+#: src/astrodoro/ui/main.py:1829
+msgid " · {rate:+.4f}°/min · r² {r2:.2f}"
+msgstr " · {rate:+.4f}°/min · r² {r2:.2f}"
+
+#: src/astrodoro/ui/main.py:3930 src/astrodoro/ui/main.py:3984
 msgid "'{text}' not found"
 msgstr "'{text}' não encontrado"
 
-#: src/astrodoro/ui/design.py:487
+#: src/astrodoro/ui/design.py:576
 msgid "(weight = what this frame is worth compared to what the night is delivering)"
 msgstr "(peso = quanto este frame vale comparado ao que a noite vem entregando)"
 
-#: src/astrodoro/ui/main.py:700
+#: src/astrodoro/ui/main.py:901
 msgid "+1h"
 msgstr "+1h"
 
-#: src/astrodoro/ui/main.py:701
+#: src/astrodoro/ui/main.py:902
 msgid "+2h"
 msgstr "+2h"
 
-#: src/astrodoro/ui/main.py:701
+#: src/astrodoro/ui/main.py:902
 msgid "+4h"
 msgstr "+4h"
 
-#: src/astrodoro/core/equatorial.py:161
+#: src/astrodoro/core/equatorial.py:171
 msgid ", ~{s}s to go"
 msgstr ", faltam ~{s}s"
 
-#: src/astrodoro/ui/main.py:120
+#: src/astrodoro/ui/main.py:1384
+msgid "0 removes the frame limit. Whichever limit comes first ends the burst"
+msgstr "0 remove o limite de quadros. A rajada termina no limite que vier primeiro"
+
+#: src/astrodoro/ui/main.py:1377
+msgid "0 removes the time limit — then only the frame count stops it"
+msgstr "0 remove o limite de tempo — aí só a contagem de quadros encerra"
+
+#: src/astrodoro/ui/main.py:129
 msgid "1  FRAME"
 msgstr "1  ENQUADRAR"
 
-#: src/astrodoro/ui/main.py:1039
-msgid "1 corrects tilt; 2 catches amp glow, which is a corner blob.\nA higher degree starts eating extended nebulosity."
-msgstr "1 corrige inclinação; 2 pega o amp glow, que é uma mancha de canto.\nGrau maior começa a comer nebulosa extensa."
-
-#: src/astrodoro/ui/main.py:878
+#: src/astrodoro/ui/main.py:1088
 msgid "1 in every"
 msgstr "1 a cada"
 
-#: src/astrodoro/ui/main.py:546
+#: src/astrodoro/ui/main.py:744
 msgid "1 · sensor on the tube"
 msgstr "1 · sensor no tubo"
 
-#: src/astrodoro/ui/main.py:682
+#: src/astrodoro/ui/main.py:883
 msgid "1 · when"
 msgstr "1 · quando"
 
-#: src/astrodoro/ui/main.py:138
+#: src/astrodoro/ui/main.py:162
 msgid "10x"
 msgstr "10×"
 
-#: src/astrodoro/ui/main.py:123
+#: src/astrodoro/ui/main.py:132
 msgid "2  TARGETS"
 msgstr "2  ALVOS"
 
-#: src/astrodoro/ui/main.py:614
+#: src/astrodoro/ui/main.py:815
 msgid "2 · camera"
 msgstr "2 · câmera"
 
-#: src/astrodoro/ui/main.py:715
+#: src/astrodoro/ui/main.py:916
 msgid "2 · filters"
 msgstr "2 · filtros"
 
-#: src/astrodoro/ui/main.py:126
+#: src/astrodoro/ui/main.py:135
 msgid "3  INTEGRATE"
 msgstr "3  INTEGRAR"
 
-#: src/astrodoro/ui/main.py:767
+#: src/astrodoro/ui/main.py:968
 msgid "3 · target"
 msgstr "3 · alvo"
 
-#: src/astrodoro/ui/main.py:128
-msgid "4  CONFIG"
-msgstr "4  CONFIG"
+#: src/astrodoro/ui/main.py:137
+msgid "4  PLANETS"
+msgstr "4  PLANETAS"
 
-#: src/astrodoro/ui/main.py:138
+#: src/astrodoro/ui/main.py:162
 msgid "4x"
 msgstr "4×"
 
-#: src/astrodoro/ui/main.py:1237
+#: src/astrodoro/ui/main.py:2085
 msgid "5x view of a star over the image, to focus without leaving what you are doing (Z)"
 msgstr "visão 5x de uma estrela sobre a imagem, para focalizar sem sair do que você está fazendo (Z)"
 
-#: src/astrodoro/ui/main.py:856
+#: src/astrodoro/ui/main.py:1056
 msgid "After resetting the platform or recentring the target: the stack\ncontinues, the thresholds relax for a few frames and the reference\nis re-extracted."
 msgstr "Depois de resetar a plataforma ou recentralizar o alvo: o stack\ncontinua, os limiares relaxam por alguns frames e a referência é\nreextraída."
 
-#: src/astrodoro/ui/main.py:504
+#: src/astrodoro/ui/main.py:1873
+msgid "Apply the correction, then measure a field you already measured: it is what says whether it worked."
+msgstr "Aplique a correção e meça de novo um campo já medido: é isso que diz se ela funcionou."
+
+#: src/astrodoro/ui/main.py:1341
+msgid "Apply the suggestion"
+msgstr "Aplicar a sugestão"
+
+#: src/astrodoro/ui/main.py:1570
+msgid "Astrodoro — configuration"
+msgstr "Astrodoro — configuração"
+
+#: src/astrodoro/ui/main.py:1603
+msgid "Astrodoro — platform alignment"
+msgstr "Astrodoro — alinhamento da plataforma"
+
+#: src/astrodoro/ui/main.py:1408
+msgid "At the magnification a planet needs, wind and seeing walk it\nacross the screen — and judging focus on something that will not\nstay still is guesswork. This keeps the view on the body instead\nof on the sensor: the image does not move, the window onto it\ndoes.\n\nDisplay only. The recorded frames are untouched, and the stack\naligns them afterwards on its own."
+msgstr "Na ampliação que um planeta pede, vento e seeing o passeiam pela\ntela — e julgar o foco em algo que não fica parado é adivinhação.\nIsto mantém a vista no corpo em vez de no sensor: a imagem não se\nmexe, a janela sobre ela sim.\n\nSó exibição. Os frames gravados ficam intactos, e o empilhamento\nos alinha depois por conta própria."
+
+#: src/astrodoro/ui/main.py:1470
+msgid "Balance on the disc"
+msgstr "Balancear no disco"
+
+#: src/astrodoro/ui/main.py:1433
+msgid "Below 1.00 opens up the maria and the terminator without touching the highlights. It is display only — the recorded frames are raw."
+msgstr "Abaixo de 1,00 abre os mares e o terminador sem tocar nas altas luzes. É só exibição — os quadros gravados são crus."
+
+#: src/astrodoro/core/lucky.py:477
+msgid "CLIPPING {pct:.2f}% — shorten the exposure to {factor:.2f}x"
+msgstr "ESTOURANDO {pct:.2f}% — encurte a exposição para {factor:.2f}x"
+
+#: src/astrodoro/ui/main.py:702
 msgid "Cooler"
 msgstr "TEC"
 
-#: src/astrodoro/ui/main.py:914
+#: src/astrodoro/ui/main.py:1146
 msgid "Corrects vignetting and dust; without one the corners go dark and\nthe autostretch gives it away."
 msgstr "Corrige vinheteamento e poeira; sem ele os cantos ficam escuros e\no autostretch denuncia."
 
-#: src/astrodoro/ui/main.py:1336
+#: src/astrodoro/ui/main.py:2191
 msgid "DSS survey image of the object, with your frame drawn on it — the fastest way to see whether the target fits. Downloaded once and kept on disk, so it is there with no internet in the field."
 msgstr "Imagem do levantamento DSS do objeto, com o seu campo desenhado por cima — o jeito mais rápido de ver se o alvo cabe. Baixada uma vez e guardada em disco, então está lá mesmo sem internet no campo."
 
-#: src/astrodoro/ui/main.py:749
+#: src/astrodoro/ui/main.py:950
 msgid "DSS survey images, downloaded once and kept on disk. Untick to stop the program touching the network at all."
 msgstr "Imagens do levantamento DSS, baixadas uma vez e guardadas em disco. Desmarque para o programa não tocar na rede."
 
-#: src/astrodoro/ui/main.py:2264
+#: src/astrodoro/ui/main.py:3486
 msgid "DSS2 · {fov:.0f}'"
 msgstr "DSS2 · {fov:.0f}'"
 
-#: src/astrodoro/ui/main.py:1712
+#: src/astrodoro/ui/main.py:1332
+msgid "Defaults for this body"
+msgstr "Padrões deste corpo"
+
+#: src/astrodoro/ui/main.py:2719
+msgid "Defaults for {body}"
+msgstr "Padrões de {body}"
+
+#: src/astrodoro/ui/main.py:2562
 msgid "Discard {time} of integration ({n} frames)?\n\nSubs already written to disk are not deleted."
 msgstr "Descartar {time} de integração ({n} frames)?\n\nOs subs gravados em disco não são apagados."
 
-#: src/astrodoro/ui/main.py:399
+#: src/astrodoro/ui/main.py:595
 msgid "Discards the accumulated integration. Subs already written to disk are not deleted."
 msgstr "Descarta a integração acumulada. Os subs já gravados em disco não são apagados."
 
-#: src/astrodoro/core/tonight.py:424 src/astrodoro/ui/skymap.py:33
+#: src/astrodoro/core/tonight.py:444 src/astrodoro/ui/skymap.py:33
 msgid "E"
 msgstr "L"
 
-#: src/astrodoro/core/tonight.py:423
+#: src/astrodoro/core/tonight.py:443
 msgid "ENE"
 msgstr "LNE"
 
-#: src/astrodoro/ui/main.py:2818
+#: src/astrodoro/ui/main.py:4044
 msgid "ERROR"
 msgstr "ERRO"
 
-#: src/astrodoro/core/tonight.py:424
+#: src/astrodoro/core/tonight.py:444
 msgid "ESE"
 msgstr "LSE"
 
-#: src/astrodoro/ui/main.py:2812
+#: src/astrodoro/ui/main.py:4036
 msgid "EXPOSING"
 msgstr "EXPONDO"
 
-#: src/astrodoro/ui/main.py:2848
+#: src/astrodoro/ui/main.py:4084
 msgid "EXPOSING  {elapsed:.1f} / {total:.1f}s"
 msgstr "EXPONDO  {elapsed:.1f} / {total:.1f}s"
 
-#: src/astrodoro/ui/main.py:2836 src/astrodoro/ui/main.py:334
+#: src/astrodoro/ui/main.py:4072 src/astrodoro/ui/main.py:529
 msgid "EXPOSURE"
 msgstr "EXPOSIÇÃO"
 
-#: src/astrodoro/ui/main.py:389
+#: src/astrodoro/ui/main.py:585
 msgid "Ends the session and closes the camera.\nThe final stack is always written to disk before finishing."
 msgstr "Encerra a sessão e fecha a câmera.\nO stack final é sempre gravado em disco antes de encerrar."
 
-#: src/astrodoro/ui/main.py:3155
+#: src/astrodoro/ui/main.py:4451
 msgid "Esc returns to live"
 msgstr "Esc volta ao vivo"
 
-#: src/astrodoro/ui/design.py:485
+#: src/astrodoro/ui/design.py:574
 msgid "FAIL"
 msgstr "REPROVA"
 
-#: src/astrodoro/ui/main.py:2810
+#: src/astrodoro/ui/main.py:4034
 msgid "FRAMING"
 msgstr "ENQUADRANDO"
 
-#: src/astrodoro/ui/design.py:328 src/astrodoro/ui/design.py:338
+#: src/astrodoro/ui/design.py:417 src/astrodoro/ui/design.py:427
 msgid "FWHM"
 msgstr "FWHM"
 
@@ -198,19 +254,23 @@ msgstr "FWHM"
 msgid "FWHM {value:.1f}px vs best {best:.1f}px"
 msgstr "FWHM {value:.1f}px vs melhor {best:.1f}px"
 
-#: src/astrodoro/ui/main.py:756
+#: src/astrodoro/ui/main.py:957
 msgid "Fetch every suggestion's picture now, while there is internet — in the field there is none, and only the cache answers."
 msgstr "Baixa a foto de cada sugestão agora, enquanto há internet — no campo não há, e só o cache responde."
 
-#: src/astrodoro/ui/main.py:3070 src/astrodoro/ui/main.py:386
+#: src/astrodoro/ui/main.py:4362 src/astrodoro/ui/main.py:582
 msgid "Finish"
 msgstr "Finalizar"
 
-#: src/astrodoro/ui/main.py:1028
-msgid "Fits a smooth surface to the background and subtracts it. Corrects\nlight pollution and the residual amp glow left over from the dark —\nwhich is exactly what the autostretch amplifies best.\nAffects the display only; the accumulator is not modified."
-msgstr "Ajusta uma superfície suave ao fundo e subtrai. Corrige poluição\nluminosa e o amp glow residual que sobra do dark — que é justamente\no que o autostretch amplifica melhor.\nSó afeta a exibição; o acumulador não é alterado."
+#: src/astrodoro/ui/main.py:1425
+msgid "Fit to this frame"
+msgstr "Ajustar a este quadro"
 
-#: src/astrodoro/ui/main.py:328
+#: src/astrodoro/ui/main.py:1463
+msgid "Green stays at 1.00: on a Bayer sensor it has twice the photosites and is the least noisy of the three, so it is the one worth measuring the other two against."
+msgstr "O verde fica em 1,00: num sensor Bayer ele tem o dobro de fotossítios e é o menos ruidoso dos três, então é contra ele que vale medir os outros dois."
+
+#: src/astrodoro/ui/main.py:2428 src/astrodoro/ui/main.py:518
 msgid "HFR"
 msgstr "HFR"
 
@@ -218,103 +278,168 @@ msgstr "HFR"
 msgid "HII region"
 msgstr "região HII"
 
-#: src/astrodoro/ui/main.py:1780
+#: src/astrodoro/ui/main.py:1626
+msgid "How long each field is measured for. What is being measured is\nthousandths of a degree per minute, and precision comes from the\nbaseline: twice the time is twice as good, twice the frames only\n√2. Five minutes resolves an error of about a quarter of a degree."
+msgstr "Por quanto tempo cada campo é medido. O que se mede são\nmilésimos de grau por minuto, e a precisão vem da linha de\nbase: o dobro do tempo vale o dobro, o dobro de frames só\n√2. Cinco minutos resolvem um erro de cerca de um quarto de grau."
+
+#: src/astrodoro/ui/main.py:2969
 msgid "How many frames?\n\nCAP THE SENSOR before confirming.\nCapture pauses while recording."
 msgstr "Quantos frames?\n\nTAMPE O SENSOR antes de confirmar.\nA captura pausa durante a gravação."
 
-#: src/astrodoro/ui/main.py:1797
-msgid "How many frames?\n\nPOINT at an evenly illuminated surface and set the exposure so\nthe histogram lands near half scale. The loaded dark is\nsubtracted if it matches. Capture pauses while recording."
-msgstr "Quantos frames?\n\nAPONTE para superfície uniformemente iluminada e ajuste a\nexposição para o histograma ficar por volta da metade da escala.\nO dark carregado, se casar, é subtraído. A captura pausa durante\na gravação."
+#: src/astrodoro/ui/main.py:2950
+msgid "How many frames?\n\nCAP THE SENSOR before confirming.\nThe exposure drops to the camera's minimum during the\nrecording and goes back to the session's afterwards."
+msgstr "Quantos frames?\n\nTAMPE O SENSOR antes de confirmar.\nA exposição cai para o mínimo da câmera durante a\ngravação e volta para a da sessão depois."
 
-#: src/astrodoro/ui/main.py:846
+#: src/astrodoro/ui/main.py:2986
+msgid "How many frames?\n\nPOINT at an evenly illuminated surface and set the exposure so\nthe histogram lands near half scale. The bias — or a dark of\nthis same exposure — is subtracted from it. Capture pauses\nwhile recording."
+msgstr "Quantos frames?\n\nAPONTE para uma superfície iluminada por igual e ajuste a exposição\npara o histograma cair perto da metade da escala. O bias — ou um dark\ndesta mesma exposição — é subtraído dele. A captura pausa durante a\ngravação."
+
+#: src/astrodoro/ui/main.py:1046
 msgid "How much a frame has to be worth, compared to what tonight is\ndelivering, to enter the stack. Lenient uses more frames and gains\nsignal; strict uses fewer and gains sharpness."
 msgstr "Quanto um frame precisa valer, comparado ao que esta noite vem\nentregando, para entrar no stack. Tolerante aproveita mais frames\ne ganha sinal; rigoroso usa menos e ganha nitidez."
 
-#: src/astrodoro/ui/main.py:2809 src/astrodoro/ui/main.py:323
+#: src/astrodoro/ui/main.py:4033 src/astrodoro/ui/main.py:513
 msgid "IDLE"
 msgstr "OCIOSO"
 
-#: src/astrodoro/ui/main.py:2813
+#: src/astrodoro/ui/main.py:4037
 msgid "INTEGRATING"
 msgstr "INTEGRANDO"
 
-#: src/astrodoro/ui/main.py:1752
+#: src/astrodoro/ui/main.py:2638
 msgid "Integrate"
 msgstr "Integrar"
 
-#: src/astrodoro/ui/main.py:2811
+#: src/astrodoro/core/lucky.py:65
+msgid "Jupiter"
+msgstr "Júpiter"
+
+#: src/astrodoro/ui/main.py:4035
 msgid "LIVE"
 msgstr "AO VIVO"
 
-#: src/astrodoro/ui/main.py:1204
+#: src/astrodoro/ui/main.py:2052
 msgid "Last frame"
 msgstr "Último frame"
 
-#: src/astrodoro/ui/main.py:894
+#: src/astrodoro/ui/main.py:1104
+msgid "Load bias"
+msgstr "Carregar bias"
+
+#: src/astrodoro/ui/main.py:1126
 msgid "Load dark"
 msgstr "Carregar Dark"
 
-#: src/astrodoro/ui/main.py:912
+#: src/astrodoro/ui/main.py:1144
 msgid "Load flat"
 msgstr "Carregar Flat"
 
-#: src/astrodoro/ui/main.py:953
+#: src/astrodoro/ui/main.py:1199
 msgid "MTF (default)"
 msgstr "MTF (padrão)"
 
-#: src/astrodoro/ui/main.py:954
+#: src/astrodoro/ui/main.py:1200
 msgid "MTF is the default, the same family as PixInsight and SharpCap.\narcsinh is gentler on the highlights and preserves the colour of a\nbright star's core, of a globular and of M42 — where the MTF blows\nout to white."
 msgstr "MTF é o padrão, mesma família do PixInsight e do SharpCap.\narcsinh é mais gentil nas altas luzes e preserva a cor do núcleo\nde estrela brilhante, globular e M42 — onde o MTF estoura em branco."
 
-#: src/astrodoro/ui/main.py:1008
+#: src/astrodoro/ui/main.py:1312
+msgid "Makes this body the target and opens FRAME, where the arrow says\nwhich way to push. Its position is recomputed every minute: the\nMoon moves half a degree an hour against the stars, which is its\nown diameter."
+msgstr "Torna este corpo o alvo e abre ENQUADRAR, onde a seta diz para\nque lado empurrar. A posição é recalculada a cada minuto: a Lua\nanda meio grau por hora contra as estrelas, que é o seu próprio\ndiâmetro."
+
+#: src/astrodoro/core/lucky.py:64
+msgid "Mars"
+msgstr "Marte"
+
+#: src/astrodoro/ui/main.py:1254
 msgid "Matches the median of the three channels, taking green as the\nreference — a white balance measured on the sky, which is the grey\nsurface always in the frame."
 msgstr "Iguala a mediana dos três canais, tomando o verde como\nreferência — balanço de branco pelo céu, que é a\nsuperfície cinza que sempre está no quadro."
 
-#: src/astrodoro/ui/main.py:2218
+#: src/astrodoro/ui/main.py:1471
+msgid "Matches the three channel medians over the lit disc. Measured on the disc and not on the frame: the frame is mostly black sky, whose median says nothing about colour.\n\nThe Moon only. Grey-world is a measurement there and an error anywhere else — Mars is red, and neutralising it would be correcting the camera for the planet."
+msgstr "Iguala as medianas dos três canais sobre o disco iluminado. Medido no disco e não no quadro: o quadro é quase todo céu preto, cuja mediana nada diz sobre cor.\n\nSó na Lua. O mundo-cinza é uma medição ali e um erro em qualquer outro lugar — Marte é vermelho, e neutralizá-lo seria corrigir a câmera pelo planeta."
+
+#: src/astrodoro/ui/main.py:1325
+msgid "Measured on the raw mosaic, before demosaicing: saturation happens\nper photosite, and mixing three colours together hides the channel\nthat went over. A clipped highlight is gone — no amount of stacking\nafterwards brings a crater floor back."
+msgstr ""
+"Medido no mosaico cru, antes do demosaico: a saturação acontece\n"
+"por fotossítio, e misturar três cores esconde o canal que estourou.\n"
+"Alta luz estourada é perda definitiva — nenhum empilhamento depois\n"
+"traz o fundo da cratera de volta."
+
+#: src/astrodoro/ui/main.py:1179
+msgid "Measures the polar alignment from the field rotation itself and\nsays which way to move the platform. It opens in a window of its\nown: the procedure needs FRAME to point the tube, and the\nmeasurement carries on while you do."
+msgstr "Mede o alinhamento polar pela própria rotação do campo e diz\npara que lado mover a plataforma. Abre em uma janela própria:\no procedimento precisa do ENQUADRAR para apontar o tubo, e a\nmedição continua enquanto você aponta."
+
+#: src/astrodoro/ui/main.py:1858
+msgid "Measuring. Leave the tube on the field and do not touch the platform — the rotation being measured is smaller than any nudge. Keep it when the bar fills."
+msgstr "Medindo. Deixe o tubo no campo e não toque na plataforma — a rotação medida é menor que qualquer esbarrão. Guarde quando a barra encher."
+
+#: src/astrodoro/core/lucky.py:62
+msgid "Mercury"
+msgstr "Mercúrio"
+
+#: src/astrodoro/ui/main.py:3440
 msgid "Messier"
 msgstr "Messier"
 
-#: src/astrodoro/ui/main.py:1381 src/astrodoro/ui/targets.py:30
+#: src/astrodoro/ui/main.py:1333
+msgid "Milliseconds, low gain, bin1 — none of the deep-sky settings\nsurvive a target eight magnitudes brighter than everything else.\nScaled off the Moon's exposure by the ratio of surface\nbrightnesses, and capped where a longer frame would average the\nseeing instead of freezing it. A starting point, not an answer:\nfinish with the suggestion above."
+msgstr "Milissegundos, ganho baixo, bin1 — nenhum ajuste de céu profundo\nsobrevive a um alvo oito magnitudes mais brilhante que o resto.\nEscalado a partir da exposição da Lua pela razão de brilhos\nsuperficiais, e limitado onde um quadro mais longo passaria a\nmediar o seeing em vez de congelá-lo. Um ponto de partida, não uma\nresposta: termine pela sugestão acima."
+
+#: src/astrodoro/core/catalog.py:31 src/astrodoro/core/lucky.py:61 src/astrodoro/ui/main.py:2236 src/astrodoro/ui/targets.py:30
 msgid "Moon"
 msgstr "Lua"
 
-#: src/astrodoro/core/tonight.py:131
+#: src/astrodoro/core/tonight.py:138
 msgid "Moon below the horizon ({pct:.0f}% lit)"
 msgstr "Lua abaixo do horizonte ({pct:.0f}% iluminada)"
 
-#: src/astrodoro/core/tonight.py:132
+#: src/astrodoro/core/tonight.py:139
 msgid "Moon {alt:.0f}° up, {pct:.0f}% lit"
 msgstr "Lua a {alt:.0f}° de altura, {pct:.0f}% iluminada"
 
-#: src/astrodoro/ui/main.py:2224
+#: src/astrodoro/ui/main.py:3446
 msgid "Moon {deg:.0f}°"
 msgstr "Lua {deg:.0f}°"
 
-#: src/astrodoro/core/tonight.py:423 src/astrodoro/ui/skymap.py:33
+#: src/astrodoro/core/tonight.py:443 src/astrodoro/ui/skymap.py:33
 msgid "N"
 msgstr "N"
 
-#: src/astrodoro/core/tonight.py:423 src/astrodoro/ui/skymap.py:33
+#: src/astrodoro/core/tonight.py:443 src/astrodoro/ui/skymap.py:33
 msgid "NE"
 msgstr "NE"
 
-#: src/astrodoro/core/tonight.py:423
+#: src/astrodoro/core/tonight.py:443
 msgid "NNE"
 msgstr "NNE"
 
-#: src/astrodoro/core/tonight.py:426
+#: src/astrodoro/core/tonight.py:446
 msgid "NNW"
 msgstr "NNO"
 
-#: src/astrodoro/core/tonight.py:426 src/astrodoro/ui/skymap.py:34
+#: src/astrodoro/core/tonight.py:446 src/astrodoro/ui/skymap.py:34
 msgid "NW"
 msgstr "NO"
 
-#: src/astrodoro/ui/main.py:854
+#: src/astrodoro/core/lucky.py:68
+msgid "Neptune"
+msgstr "Netuno"
+
+#: src/astrodoro/ui/main.py:1054
 msgid "New segment   (space)"
 msgstr "Novo segmento   (espaço)"
 
-#: src/astrodoro/ui/main.py:978
+#: src/astrodoro/ui/main.py:1388
+msgid "Off by default, unlike a deep-sky session. Measured at bin1 it\ncosts 119 ms a frame against 32 ms, which caps the burst at 8 fps\ninstead of 31, and saves 40% of the space. Lucky imaging is bought\nin frames, so the trade normally goes the other way here — turn it\non for long exposures, where the frame rate is not the limit."
+msgstr ""
+"Desligado por padrão, ao contrário de uma sessão de céu profundo.\n"
+"Medido em bin1 custa 119 ms por quadro contra 32 ms, o que limita a\n"
+"rajada a 8 fps em vez de 31, e economiza 40% de espaço. Lucky imaging\n"
+"se compra em quadros, então aqui a troca costuma ser ao contrário —\n"
+"ligue para exposições longas, onde a taxa não é o limite."
+
+#: src/astrodoro/ui/main.py:1224
 msgid "Off: each channel separately, which neutralises the background —\nbetter under light pollution. On: preserves the colour ratios."
 msgstr "Desligado: cada canal em separado, neutraliza o fundo — melhor sob\npoluição luminosa. Ligado: preserva as razões de cor."
 
@@ -322,127 +447,194 @@ msgstr "Desligado: cada canal em separado, neutraliza o fundo — melhor sob\npo
 msgid "One beep per frame, pitch rising as the HFR falls. With a hand on the focuser you are not looking at the screen."
 msgstr "Um bipe por frame, com o tom subindo conforme o HFR cai. Com a mão no focalizador você não está olhando para a tela."
 
-#: src/astrodoro/ui/main.py:371
+#: src/astrodoro/ui/main.py:1867
+msgid "One field gives the error along that direction only. Point at the second field below and measure again."
+msgstr "Um campo só dá o erro naquela direção. Aponte para o segundo campo abaixo e meça de novo."
+
+#: src/astrodoro/ui/main.py:567
 msgid "Opens the camera. What happens to the frames depends on the mode:\nFrame and Focus only capture and measure stars; Integrate stacks,\nrecords the subs and measures the residual rotation."
 msgstr "Liga a câmera. O que é feito com os frames depende do modo:\nEnquadrar e Focar só capturam e medem estrelas; Integrar empilha,\ngrava os subs e mede a rotação residual."
 
-#: src/astrodoro/ui/main.py:2816 src/astrodoro/ui/main.py:2842
+#: src/astrodoro/ui/main.py:4042 src/astrodoro/ui/main.py:4078
 msgid "PAUSED"
 msgstr "PAUSADO"
 
-#: src/astrodoro/ui/main.py:3038 src/astrodoro/ui/main.py:3067 src/astrodoro/ui/main.py:377
+#: src/astrodoro/ui/main.py:4330 src/astrodoro/ui/main.py:4359 src/astrodoro/ui/main.py:573
 msgid "Pause"
 msgstr "Pausar"
 
-#: src/astrodoro/ui/main.py:2854
+#: src/astrodoro/ui/main.py:1062 src/astrodoro/ui/main.py:2665
+msgid "Pause & realign   (R)"
+msgstr "Pausar e realinhar   (R)"
+
+#: src/astrodoro/ui/main.py:1065
+msgid "Pauses accumulation without losing the stack, and draws an arrow over the image at the target's current position. Nudge the tube until it disappears, then resume: a new segment starts on its own, with relaxed thresholds and a fresh reference."
+msgstr "Pausa o acúmulo sem perder o stack, e desenha uma seta sobre a imagem na posição atual do alvo. Empurre o tubo até ela sumir, depois retome: um novo segmento começa sozinho, com limiares relaxados e uma referência nova."
+
+#: src/astrodoro/ui/main.py:1863
+msgid "Point at a field with stars in it, high enough to be steady, and press measure. Nothing is recorded and the platform is not used up."
+msgstr "Aponte para um campo com estrelas, alto o bastante para ficar estável, e aperte medir. Nada é gravado e o curso da plataforma não é consumido."
+
+#: src/astrodoro/ui/main.py:1310
+msgid "Point at it"
+msgstr "Apontar para ele"
+
+#: src/astrodoro/ui/main.py:2718
+msgid "Point at {body}"
+msgstr "Apontar para {body}"
+
+#: src/astrodoro/ui/main.py:4090
 msgid "READING AND PROCESSING  +{over:.1f}s"
 msgstr "LENDO E PROCESSANDO  +{over:.1f}s"
 
-#: src/astrodoro/ui/main.py:2815
+#: src/astrodoro/ui/main.py:4040
 msgid "READY"
 msgstr "PRONTO"
 
-#: src/astrodoro/ui/main.py:2814
+#: src/astrodoro/ui/main.py:4038
+msgid "REALIGNING"
+msgstr "REALINHANDO"
+
+#: src/astrodoro/ui/main.py:4041
+msgid "RECORDING"
+msgstr "GRAVANDO"
+
+#: src/astrodoro/ui/main.py:4039
 msgid "REPLAY"
 msgstr "REPLAY"
 
-#: src/astrodoro/ui/main.py:3145
+#: src/astrodoro/ui/main.py:4441
 msgid "REVIEWING #{index}"
 msgstr "REVENDO #{index}"
 
-#: src/astrodoro/ui/main.py:1779 src/astrodoro/ui/main.py:897
+#: src/astrodoro/ui/main.py:1111 src/astrodoro/ui/main.py:2949
+msgid "Record bias"
+msgstr "Gravar bias"
+
+#: src/astrodoro/ui/main.py:1353 src/astrodoro/ui/main.py:2893
+msgid "Record burst   (R)"
+msgstr "Gravar rajada   (R)"
+
+#: src/astrodoro/ui/main.py:1129 src/astrodoro/ui/main.py:2968
 msgid "Record dark"
 msgstr "Gravar Dark"
 
-#: src/astrodoro/ui/main.py:1796 src/astrodoro/ui/main.py:918
+#: src/astrodoro/ui/main.py:1150 src/astrodoro/ui/main.py:2985
 msgid "Record flat"
 msgstr "Gravar Flat"
 
-#: src/astrodoro/ui/main.py:899
+#: src/astrodoro/ui/main.py:1113
+msgid "Records a master bias with the gain, offset and bin of the session\nin progress. The exposure drops to the camera's minimum for the\nrecording and goes back afterwards. Cap the sensor first."
+msgstr "Grava um bias mestre com o ganho, o offset e o bin da sessão em\nandamento. A exposição cai para o mínimo da câmera durante a\ngravação e volta depois. Tampe o sensor antes."
+
+#: src/astrodoro/ui/main.py:1131
 msgid "Records a master dark with the exposure, gain, offset, bin and\ntemperature of the session in progress — which is exactly what a\ndark has to match. Cap the sensor first."
 msgstr "Grava um master dark com a exposição, ganho, offset, bin e\ntemperatura da sessão em curso — que é justamente o que um dark\nprecisa casar. Tampe o sensor antes."
 
-#: src/astrodoro/ui/main.py:920
-msgid "Records a master flat with the gain and bin of the session in\nprogress. Point at an evenly illuminated surface — twilight sky, a\nflat panel, a stretched white shirt — and set the exposure so the\nhistogram lands near half scale."
-msgstr "Grava um master flat com o ganho e o bin da sessão em curso.\nAponte para superfície uniformemente iluminada — céu do\ncrepúsculo, painel de flat, camiseta branca esticada — e ajuste\na exposição para o histograma ficar perto da metade da escala."
+#: src/astrodoro/ui/main.py:1152
+msgid "Records a master flat with the gain and bin of the session in\nprogress. Point at an evenly illuminated surface — twilight sky, a\nflat panel, a stretched white shirt — and set the exposure so the\nhistogram lands near half scale. The bias, or a dark of this same\nexposure, is subtracted from it."
+msgstr "Grava um flat mestre com o ganho e o bin da sessão em andamento.\nAponte para uma superfície iluminada por igual — céu do crepúsculo,\num painel de flat, uma camiseta branca esticada — e ajuste a\nexposição para o histograma cair perto da metade da escala. O bias,\nou um dark desta mesma exposição, é subtraído dele."
 
-#: src/astrodoro/ui/main.py:1711 src/astrodoro/ui/main.py:397
+#: src/astrodoro/ui/main.py:2561 src/astrodoro/ui/main.py:593
 msgid "Reset"
 msgstr "Zerar"
 
-#: src/astrodoro/ui/main.py:3038
+#: src/astrodoro/ui/main.py:4330
 msgid "Resume"
 msgstr "Continuar"
 
-#: src/astrodoro/core/tonight.py:425 src/astrodoro/ui/skymap.py:34
+#: src/astrodoro/ui/main.py:2664
+msgid "Resume   (R)"
+msgstr "Retomar   (R)"
+
+#: src/astrodoro/core/tonight.py:445 src/astrodoro/ui/skymap.py:34
 msgid "S"
 msgstr "S"
 
-#: src/astrodoro/ui/worker.py:566
+#: src/astrodoro/ui/worker.py:727
 msgid "SATURATING"
 msgstr "SATURANDO"
 
-#: src/astrodoro/core/tonight.py:424 src/astrodoro/ui/skymap.py:33
+#: src/astrodoro/core/tonight.py:444 src/astrodoro/ui/skymap.py:33
 msgid "SE"
 msgstr "SE"
 
-#: src/astrodoro/core/tonight.py:424
+#: src/astrodoro/core/tonight.py:444
 msgid "SSE"
 msgstr "SSE"
 
-#: src/astrodoro/core/tonight.py:425
+#: src/astrodoro/core/tonight.py:445
 msgid "SSW"
 msgstr "SSO"
 
-#: src/astrodoro/ui/main.py:2817
+#: src/astrodoro/ui/main.py:4043
 msgid "STOPPING"
 msgstr "PARANDO"
 
-#: src/astrodoro/core/tonight.py:425 src/astrodoro/ui/skymap.py:34
+#: src/astrodoro/core/tonight.py:445 src/astrodoro/ui/skymap.py:34
 msgid "SW"
 msgstr "SO"
 
-#: src/astrodoro/ui/main.py:1205
+#: src/astrodoro/core/lucky.py:66
+msgid "Saturn"
+msgstr "Saturno"
+
+#: src/astrodoro/ui/main.py:1342
+msgid "Scales the exposure so the brightest photosite lands just below\nsaturation. Takes two or three goes once it is clipping: a clipped\nframe no longer records how far over it went."
+msgstr ""
+"Escala a exposição para o fotossítio mais brilhante ficar logo\n"
+"abaixo da saturação. Leva duas ou três tentativas quando já está\n"
+"estourando: um quadro estourado não registra o quanto passou."
+
+#: src/astrodoro/ui/main.py:1426
+msgid "Sets the white point from the brightest part of the current frame."
+msgstr "Define o ponto branco pela parte mais brilhante do quadro atual."
+
+#: src/astrodoro/ui/main.py:2053
 msgid "Sky map   (M)"
 msgstr "Mapa do céu   (M)"
 
-#: src/astrodoro/ui/main.py:1203
+#: src/astrodoro/ui/main.py:2051
 msgid "Stack"
 msgstr "Stack"
 
-#: src/astrodoro/ui/main.py:369
+#: src/astrodoro/ui/main.py:565
 msgid "Start"
 msgstr "Iniciar"
 
-#: src/astrodoro/ui/main.py:1767 src/astrodoro/ui/main.py:803
+#: src/astrodoro/ui/main.py:1004 src/astrodoro/ui/main.py:2653
 msgid "Start integrating"
 msgstr "Começar a integrar"
 
-#: src/astrodoro/ui/main.py:806
+#: src/astrodoro/ui/main.py:1007
 msgid "Starts stacking, recording the subs and measuring the platform.\nSwitching modes does not trigger this on its own: coming in here\nonly shows the panel. Writing to disk and consuming platform travel\nis your decision, not a side effect of clicking a tab."
 msgstr "Começa a empilhar, gravar os subs e medir a plataforma.\nTrocar de modo não dispara isso sozinho: entrar aqui só mostra o\npainel. Escrever em disco e consumir curso da plataforma é decisão\nsua, não efeito colateral de clicar numa aba."
 
-#: src/astrodoro/ui/main.py:1766
+#: src/astrodoro/ui/main.py:2652
 msgid "Stop integrating"
 msgstr "Parar integração"
 
-#: src/astrodoro/ui/main.py:380
+#: src/astrodoro/ui/main.py:2892
+msgid "Stop the burst"
+msgstr "Parar a rajada"
+
+#: src/astrodoro/ui/main.py:576
 msgid "Stops pulling frames without closing the camera.\nThe stack and the recording stay intact — Resume continues on the\nsame accumulator."
 msgstr "Para de puxar frames sem fechar a câmera.\nStack e gravação ficam intactos — Continuar retoma no mesmo\nacumulador."
 
-#: src/astrodoro/ui/main.py:991
+#: src/astrodoro/ui/main.py:1237
 msgid "Stretching compresses the distance between channels and the nebula\ngoes pale; this gives the colour back without touching brightness."
 msgstr "Esticar comprime a distância entre canais e a nebulosa fica pálida;\nisto devolve a cor sem mexer no brilho."
 
-#: src/astrodoro/ui/main.py:2403
+#: src/astrodoro/ui/main.py:3625
 msgid "Switch the sensor off"
 msgstr "Desligar o sensor"
 
-#: src/astrodoro/ui/main.py:2413 src/astrodoro/ui/main.py:547
+#: src/astrodoro/ui/main.py:3635 src/astrodoro/ui/main.py:745
 msgid "Switch the sensor on"
 msgstr "Ligar o sensor"
 
-#: src/astrodoro/ui/main.py:507
+#: src/astrodoro/ui/main.py:705
 msgid "Switches cooling on with a controlled ramp.\nSending the final target in one go makes the TEC pull 100% and the\ntemperature plunge, which stresses the sensor joint and encourages\ncondensation."
 msgstr "Liga a refrigeração em rampa controlada.\nMandar o alvo final de uma vez faz o TEC puxar 100% e a temperatura\ndespencar, o que estressa a junta do sensor e favorece condensação."
 
@@ -450,137 +642,182 @@ msgstr "Liga a refrigeração em rampa controlada.\nMandar o alvo final de uma v
 msgid "TEC at {power}% for {seconds}s without reaching the target — unreachable tonight; try {suggestion:+.0f} C"
 msgstr "TEC em {power}% há {seconds}s sem chegar ao alvo — inalcançável nesta noite; tente {suggestion:+.0f} °C"
 
-#: src/astrodoro/ui/main.py:1753
+#: src/astrodoro/ui/main.py:2639
 msgid "Target name (it will name the session folder):"
 msgstr "Nome do alvo (vai nomear a pasta da sessão):"
 
-#: src/astrodoro/ui/main.py:576
+#: src/astrodoro/ui/main.py:1871
+msgid "The fields measured so far do not separate the two screws. Measure the field suggested below."
+msgstr "Os campos medidos até agora não separam os dois ajustes. Meça o campo sugerido abaixo."
+
+#: src/astrodoro/ui/main.py:1490
+msgid "The mineral Moon lives at 2-3: the colour is real — titanium in the blue maria, iron oxide in the orange ones — and only a few percent apart, so it takes amplifying to be seen at all."
+msgstr "A Lua mineral vive entre 2 e 3: a cor é real — titânio nos mares azuis, óxido de ferro nos alaranjados — e só uns poucos por cento de diferença, então precisa ser amplificada para aparecer."
+
+#: src/astrodoro/ui/main.py:1106
+msgid "The offset pedestal, at the shortest exposure the camera does.\nApplied only when no dark is loaded — a dark already contains it —\nand it is what a flat has to have subtracted."
+msgstr "O pedestal de offset, na exposição mais curta que a câmera faz.\nAplicado só quando não há dark carregado — o dark já o contém — e é\no que precisa ser subtraído de um flat."
+
+#: src/astrodoro/ui/main.py:1676
+msgid "The rotation is measured on the sensor, and whether its sign\nagrees with the sky depends on how many mirrors the light bounced\noff. If the residual rotation grew after you applied a correction,\nthe sign is the wrong way round for this telescope: invert it here\nand it stays inverted for good."
+msgstr "A rotação é medida no sensor, e se o sinal dela concorda com o\ncéu depende de quantos espelhos a luz atravessou. Se a rotação\nresidual cresceu depois de você aplicar uma correção, o sinal\nestá invertido para este telescópio: inverta aqui e fica\ninvertido de uma vez."
+
+#: src/astrodoro/ui/main.py:777
 msgid "The star worth aligning on right now: bright, unmistakable (no similar star beside it), comfortable to reach, and as close to the target as possible — one star corrects two axes and is most accurate around itself."
 msgstr "A estrela que vale usar para alinhar agora: brilhante, inconfundível (sem outra parecida ao lado), confortável de alcançar e o mais perto possível do alvo — uma estrela corrige dois eixos e é mais precisa em torno de si mesma."
 
-#: src/astrodoro/ui/worker.py:330
+#: src/astrodoro/ui/worker.py:403
 msgid "USB negotiated at {port}: ~475 ms of dead time per frame (irrelevant for long subs, slow while focusing)"
 msgstr "USB em {port}: ~475 ms de tempo morto por frame (irrelevante em subs longos, lento ao focar)"
 
-#: src/astrodoro/ui/main.py:1247
+#: src/astrodoro/core/lucky.py:67
+msgid "Uranus"
+msgstr "Urano"
+
+#: src/astrodoro/ui/main.py:2099
 msgid "V toggles"
 msgstr "V alterna"
 
-#: src/astrodoro/core/tonight.py:426 src/astrodoro/ui/skymap.py:34
+#: src/astrodoro/core/lucky.py:63
+msgid "Venus"
+msgstr "Vênus"
+
+#: src/astrodoro/core/tonight.py:446 src/astrodoro/ui/skymap.py:34
 msgid "W"
 msgstr "O"
 
-#: src/astrodoro/ui/main.py:2856
+#: src/astrodoro/ui/main.py:4092
 msgid "WAITING FOR A FRAME  +{over:.0f}s"
 msgstr "AGUARDANDO FRAME  +{over:.0f}s"
 
-#: src/astrodoro/core/tonight.py:426
+#: src/astrodoro/core/tonight.py:446
 msgid "WNW"
 msgstr "ONO"
 
-#: src/astrodoro/core/tonight.py:425
+#: src/astrodoro/core/tonight.py:445
 msgid "WSW"
 msgstr "OSO"
 
-#: src/astrodoro/ui/main.py:828
+#: src/astrodoro/ui/main.py:1028
 msgid "Weights each frame by flux/(noise²·FWHM²). It matters alongside\nvote-based registration, which lets marginal frames in: the weight\nkeeps them from dragging the stack down."
 msgstr "Pesa cada frame por fluxo/(ruído²·FWHM²). Faz diferença junto com o\nregistro por votação, que deixa entrar frames marginais: o peso\nimpede que eles puxem o stack para baixo."
 
-#: src/astrodoro/ui/main.py:985
+#: src/astrodoro/ui/main.py:1420
+msgid "Which fraction of full scale comes out white. A gibbous Moon at a safe exposure only reaches half the range, and at 1.00 it is a grey disc on screen while the data underneath is fine."
+msgstr "Que fração da escala cheia sai branca. Uma Lua gibosa em exposição segura chega só à metade da faixa, e em 1,00 vira um disco cinza na tela embora o dado por baixo esteja bom."
+
+#: src/astrodoro/ui/main.py:1231
 msgid "White point: the value that comes out as 255. Lowering it saturates\nthe highlights on purpose — that is how faint nebulosity is brought\nup without waiting for the core to behave. 1.00 uses the full scale."
 msgstr "Ponto branco: o valor que sai em 255. Baixar satura as altas luzes\nde propósito — é o que se faz para trazer nebulosa fraca sem\nesperar o núcleo se comportar. 1,00 usa a escala inteira."
 
-#: src/astrodoro/ui/main.py:3272
+#: src/astrodoro/ui/main.py:1357
+msgid "Writes every frame to its own session folder until the limit below,\nand stops on its own. This is what replaces integration here: the\nsharpest few percent are stacked later, in a program built for it.\nEach frame carries its measured sharpness in the FITS header, so\npicking them does not mean measuring everything again."
+msgstr ""
+"Grava todos os quadros numa pasta de sessão própria até o limite\n"
+"abaixo, e para sozinha. É o que substitui a integração aqui: os\n"
+"poucos por cento mais nítidos são empilhados depois, num programa\n"
+"feito para isso. Cada quadro leva a nitidez medida no cabeçalho\n"
+"FITS, então escolher não é medir tudo de novo."
+
+#: src/astrodoro/ui/worker.py:1213
+msgid "a burst needs the camera, not a replay"
+msgstr "rajada precisa da câmera, não de um replay"
+
+#: src/astrodoro/ui/main.py:2879
+msgid "a channel has no signal on the disc"
+msgstr "um canal não tem sinal no disco"
+
+#: src/astrodoro/ui/main.py:4552
 msgid "a channel has no signal — nothing to equalise"
 msgstr "canal sem sinal — nada a equalizar"
 
-#: src/astrodoro/ui/main.py:789
+#: src/astrodoro/ui/main.py:990
 msgid "a name you already know; the list is for the rest."
 msgstr "um nome que você já conhece; a lista é para o resto."
 
-#: src/astrodoro/ui/main.py:852
+#: src/astrodoro/ui/main.py:1052
 msgid "accept frames"
 msgstr "aceitar frames"
 
-#: src/astrodoro/ui/design.py:438 src/astrodoro/ui/main.py:3146
+#: src/astrodoro/ui/design.py:527 src/astrodoro/ui/main.py:4442
 msgid "accepted"
 msgstr "aceito"
 
-#: src/astrodoro/ui/main.py:584
+#: src/astrodoro/ui/main.py:785
 msgid "aim at it and align"
 msgstr "mire nela e alinhe"
 
-#: src/astrodoro/ui/main.py:960
+#: src/astrodoro/ui/main.py:1206
 msgid "algorithm"
 msgstr "algoritmo"
 
-#: src/astrodoro/ui/main.py:2793
+#: src/astrodoro/ui/main.py:4017
 msgid "align the sensor to compute the direction"
 msgstr "alinhe o sensor para calcular a direção"
 
-#: src/astrodoro/ui/main.py:2464 src/astrodoro/ui/skymap.py:415
+#: src/astrodoro/ui/main.py:3687 src/astrodoro/ui/skymap.py:415
 msgid "aligned"
 msgstr "alinhado"
 
-#: src/astrodoro/ui/main.py:2463 src/astrodoro/ui/main.py:2749 src/astrodoro/ui/main.py:3183 src/astrodoro/ui/skymap.py:414
+#: src/astrodoro/ui/main.py:3686 src/astrodoro/ui/main.py:3973 src/astrodoro/ui/main.py:4480 src/astrodoro/ui/skymap.py:414
 msgid "aligned on {star}"
 msgstr "alinhado em {star}"
 
-#: src/astrodoro/ui/main.py:2522
+#: src/astrodoro/ui/main.py:3746
 msgid "alignment cleared"
 msgstr "alinhamento zerado"
 
-#: src/astrodoro/ui/main.py:2216 src/astrodoro/ui/targets.py:139
+#: src/astrodoro/ui/worker.py:933
+msgid "alignment measurement stopped"
+msgstr "medição de alinhamento interrompida"
+
+#: src/astrodoro/ui/main.py:3438 src/astrodoro/ui/targets.py:139
 msgid "all night"
 msgstr "a noite toda"
 
-#: src/astrodoro/ui/main.py:1379 src/astrodoro/ui/targets.py:30
+#: src/astrodoro/ui/main.py:1548 src/astrodoro/ui/main.py:2234 src/astrodoro/ui/targets.py:30
 msgid "altitude"
 msgstr "altitude"
 
-#: src/astrodoro/ui/main.py:2221
+#: src/astrodoro/ui/main.py:3443
 msgid "altitude {alt:.0f}°"
 msgstr "altitude {alt:.0f}°"
 
-#: src/astrodoro/ui/main.py:591
+#: src/astrodoro/ui/main.py:792
 msgid "another star — this one may be behind a tree"
 msgstr "outra estrela — esta pode estar atrás de uma árvore"
 
-#: src/astrodoro/ui/main.py:3243
-msgid "applied"
-msgstr "aplicado"
-
-#: src/astrodoro/ui/main.py:953
+#: src/astrodoro/ui/main.py:1199
 msgid "arcsinh"
 msgstr "arcsinh"
 
-#: src/astrodoro/ui/main.py:137
+#: src/astrodoro/ui/main.py:161
 msgid "as fast as possible"
 msgstr "o mais rápido"
 
-#: src/astrodoro/core/tonight.py:124
+#: src/astrodoro/core/tonight.py:131
 msgid "astronomical twilight ({alt:.0f}°) — nearly dark"
 msgstr "crepúsculo astronômico ({alt:.0f}°) — quase escuro"
 
-#: src/astrodoro/core/focus.py:99
+#: src/astrodoro/core/focus.py:104
 msgid "at the session's best focus"
 msgstr "no melhor foco da sessão"
+
+#: src/astrodoro/core/focus.py:254
+msgid "at the session's sharpest"
+msgstr "no mais nítido da sessão"
 
 #: src/astrodoro/ui/loupe.py:105
 msgid "auto"
 msgstr "auto"
 
-#: src/astrodoro/ui/main.py:969
+#: src/astrodoro/ui/main.py:1215
 msgid "autostretch"
 msgstr "autostretch"
 
-#: src/astrodoro/ui/main.py:973
+#: src/astrodoro/ui/main.py:1219
 msgid "background"
 msgstr "fundo"
-
-#: src/astrodoro/ui/main.py:1026
-msgid "background gradient"
-msgstr "gradiente de fundo"
 
 #: src/astrodoro/core/stacker.py:364
 msgid "background {ratio:.1f}x above normal"
@@ -590,7 +827,11 @@ msgstr "fundo {ratio:.1f}x acima do normal"
 msgid "beep"
 msgstr "bipe"
 
-#: src/astrodoro/ui/main.py:2718
+#: src/astrodoro/core/lucky.py:191
+msgid "below the horizon"
+msgstr "abaixo do horizonte"
+
+#: src/astrodoro/ui/main.py:3942
 msgid "below the horizon ({alt:.0f}°)"
 msgstr "abaixo do horizonte ({alt:.0f}°)"
 
@@ -598,15 +839,23 @@ msgstr "abaixo do horizonte ({alt:.0f}°)"
 msgid "best {best:.2f}"
 msgstr "melhor {best:.2f}"
 
-#: src/astrodoro/ui/main.py:495
+#: src/astrodoro/ui/main.py:1937 src/astrodoro/ui/worker.py:779
+msgid "bias"
+msgstr "bias"
+
+#: src/astrodoro/ui/worker.py:462
+msgid "bias: {name} (median {median:.0f})"
+msgstr "bias: {name} (mediana {median:.0f})"
+
+#: src/astrodoro/ui/main.py:693
 msgid "bin"
 msgstr "bin"
 
-#: src/astrodoro/drivers/svbony/camera.py:406
+#: src/astrodoro/drivers/svbony/camera.py:428
 msgid "bin {bin} is not supported; available: {available}"
 msgstr "bin {bin} não suportado; disponíveis: {available}"
 
-#: src/astrodoro/ui/main.py:490
+#: src/astrodoro/ui/main.py:688
 msgid "bin2 is the only bin >1 without loss on this camera;\nbin3 and bin4 clip the highlights"
 msgstr "bin2 é o único bin >1 sem perda nesta câmera;\nbin3 e bin4 grampeiam as altas luzes"
 
@@ -614,73 +863,121 @@ msgstr "bin2 é o único bin >1 sem perda nesta câmera;\nbin3 e bin4 grampeiam 
 msgid "bin{value} applied"
 msgstr "bin{value} aplicado"
 
-#: src/astrodoro/ui/main.py:1001
+#: src/astrodoro/ui/main.py:1247 src/astrodoro/ui/main.py:1459
 msgid "blue"
 msgstr "azul"
 
-#: src/astrodoro/ui/main.py:2230
+#: src/astrodoro/ui/main.py:1299
+msgid "body"
+msgstr "corpo"
+
+#: src/astrodoro/ui/main.py:3452
 msgid "brightness unknown"
 msgstr "brilho desconhecido"
 
-#: src/astrodoro/ui/main.py:754
+#: src/astrodoro/ui/main.py:1352 src/astrodoro/ui/main.py:2429
+msgid "burst"
+msgstr "rajada"
+
+#: src/astrodoro/ui/worker.py:974
+msgid "burst closed on leaving PLANETS"
+msgstr "rajada encerrada ao sair de PLANETAS"
+
+#: src/astrodoro/ui/worker.py:306
+msgid "burst closed with the session"
+msgstr "rajada encerrada com a sessão"
+
+#: src/astrodoro/ui/worker.py:1076
+msgid "burst interrupted: {error}"
+msgstr "rajada interrompida: {error}"
+
+#: src/astrodoro/ui/worker.py:1240
+msgid "burst recording to {path}"
+msgstr "gravando rajada em {path}"
+
+#: src/astrodoro/ui/worker.py:917
+msgid "burst stopped"
+msgstr "rajada parada"
+
+#: src/astrodoro/ui/worker.py:1254
+msgid "burst: {n} frames in {seconds:.1f} s ({fps:.1f} fps) -> {path}"
+msgstr "rajada: {n} quadros em {seconds:.1f} s ({fps:.1f} fps) -> {path}"
+
+#: src/astrodoro/ui/main.py:955
 msgid "cache the photos of this list"
 msgstr "baixar as fotos desta lista"
 
-#: src/astrodoro/ui/main.py:892
+#: src/astrodoro/ui/main.py:1102
 msgid "calibration"
 msgstr "calibração"
 
-#: src/astrodoro/ui/main.py:617
+#: src/astrodoro/ui/main.py:818
 msgid "camera"
 msgstr "câmera"
 
-#: src/astrodoro/ui/main.py:2898
+#: src/astrodoro/ui/main.py:4139
 msgid "camera without cooling"
 msgstr "câmera sem refrigeração"
 
-#: src/astrodoro/ui/main.py:459
+#: src/astrodoro/ui/main.py:655
 msgid "capture"
 msgstr "captura"
 
-#: src/astrodoro/ui/worker.py:200
+#: src/astrodoro/ui/worker.py:265
 msgid "capture: {error}"
 msgstr "captura: {error}"
 
-#: src/astrodoro/ui/main.py:2219
+#: src/astrodoro/ui/main.py:3441
 msgid "catalogue number"
 msgstr "só número de catálogo"
 
-#: src/astrodoro/ui/main.py:2391
+#: src/astrodoro/ui/main.py:3613
 msgid "catalogue unavailable: {error}"
 msgstr "catálogo indisponível: {error}"
 
-#: src/astrodoro/ui/main.py:2387
+#: src/astrodoro/ui/main.py:3609
 msgid "catalogue: {n} objects"
 msgstr "catálogo: {n} objetos"
 
-#: src/astrodoro/ui/main.py:1102
+#: src/astrodoro/ui/main.py:1965
 msgid "changes apply to the next session; the one in progress keeps writing where it started"
 msgstr "as mudanças valem para a próxima sessão; a que está em curso continua gravando onde começou"
 
-#: src/astrodoro/ui/main.py:1679
+#: src/astrodoro/ui/main.py:1177
+msgid "check the alignment…"
+msgstr "verificar o alinhamento…"
+
+#: src/astrodoro/ui/main.py:2529
 msgid "choose a folder"
 msgstr "escolher uma pasta"
 
-#: src/astrodoro/ui/main.py:1311 src/astrodoro/ui/main.py:2530
+#: src/astrodoro/ui/main.py:1734
+msgid "choose a target first: the correction needs to know where the tube is pointing"
+msgstr "escolha um alvo primeiro: a correção precisa saber para onde o tubo aponta"
+
+#: src/astrodoro/ui/main.py:2166 src/astrodoro/ui/main.py:3755
 msgid "choose a target in TARGETS (2)"
 msgstr "escolha um alvo em ALVOS (2)"
 
-#: src/astrodoro/core/tonight.py:118
+#: src/astrodoro/core/tonight.py:125
 msgid "civil twilight ({alt:.0f}°) — only the brightest objects"
 msgstr "crepúsculo civil ({alt:.0f}°) — só os objetos mais brilhantes"
 
-#: src/astrodoro/ui/main.py:607
+#: src/astrodoro/ui/main.py:808
 msgid "clear the alignment"
 msgstr "zerar o alinhamento"
 
-#: src/astrodoro/ui/design.py:454
+#: src/astrodoro/ui/design.py:543
 msgid "click to see this frame"
 msgstr "clique para ver este frame"
+
+#: src/astrodoro/ui/main.py:1529
+msgid "clipped"
+msgstr "estourado"
+
+#: src/astrodoro/ui/main.py:1578 src/astrodoro/ui/main.py:1687
+msgid "close"
+msgstr "fechar"
 
 #: src/astrodoro/ui/loupe.py:59
 msgid "close the loupe (Z)"
@@ -690,35 +987,51 @@ msgstr "fechar a lupa (Z)"
 msgid "cluster + nebula"
 msgstr "aglomerado + nebulosa"
 
-#: src/astrodoro/ui/main.py:2465
+#: src/astrodoro/ui/main.py:1457
+msgid "colour"
+msgstr "cor"
+
+#: src/astrodoro/ui/main.py:3688
 msgid "compass — not aligned yet"
 msgstr "bússola — falta alinhar"
 
-#: src/astrodoro/core/cooling.py:99 src/astrodoro/ui/main.py:1608 src/astrodoro/ui/main.py:525
+#: src/astrodoro/ui/main.py:1386
+msgid "compress the burst (RICE)"
+msgstr "comprimir a rajada (RICE)"
+
+#: src/astrodoro/ui/main.py:1302
+msgid "computing…"
+msgstr "calculando…"
+
+#: src/astrodoro/ui/main.py:481
+msgid "config"
+msgstr "config"
+
+#: src/astrodoro/core/cooling.py:99 src/astrodoro/ui/main.py:2459 src/astrodoro/ui/main.py:723
 msgid "cooler off"
 msgstr "TEC desligado"
 
-#: src/astrodoro/ui/main.py:2868
+#: src/astrodoro/ui/main.py:4109
 msgid "cooler saturated"
 msgstr "TEC saturado"
 
-#: src/astrodoro/ui/main.py:1607
+#: src/astrodoro/ui/main.py:2458
 msgid "cooler will start with the capture"
 msgstr "TEC ligará ao iniciar a captura"
 
-#: src/astrodoro/ui/worker.py:420
+#: src/astrodoro/ui/worker.py:531
 msgid "cooler: ramping from {current:+.1f} to {target:+.1f} C at {rate:.1f} C/min"
 msgstr "TEC: rampa de {current:+.1f} para {target:+.1f} °C a {rate:.1f} °C/min"
 
-#: src/astrodoro/ui/worker.py:426
+#: src/astrodoro/ui/worker.py:537
 msgid "cooler: warming up before switching off"
 msgstr "TEC: reaquecendo antes de desligar"
 
-#: src/astrodoro/ui/worker.py:447
+#: src/astrodoro/ui/worker.py:563
 msgid "cooler: {error}"
 msgstr "TEC: {error}"
 
-#: src/astrodoro/ui/main.py:3024
+#: src/astrodoro/ui/main.py:4316
 msgid "cooling"
 msgstr "resfriando"
 
@@ -726,85 +1039,109 @@ msgstr "resfriando"
 msgid "cooling: {current:+.1f} -> {target:+.1f} C (setpoint {setpoint:+.1f}), TEC {power}%"
 msgstr "resfriando: {current:+.1f} → {target:+.1f} °C (setpoint {setpoint:+.1f}), TEC {power}%"
 
-#: src/astrodoro/ui/main.py:1435
+#: src/astrodoro/ui/main.py:2290
 msgid "corner smear"
 msgstr "arrasto no canto"
 
-#: src/astrodoro/ui/main.py:2741
+#: src/astrodoro/ui/main.py:1670
+msgid "correction"
+msgstr "correção"
+
+#: src/astrodoro/ui/main.py:3965
 msgid "could not align: no recent samples"
 msgstr "não deu para alinhar: sem amostras recentes"
 
-#: src/astrodoro/ui/main.py:2054
+#: src/astrodoro/ui/main.py:3260
 msgid "could not choose an alignment star: {error}"
 msgstr "não foi possível escolher uma estrela de alinhamento: {error}"
 
-#: src/astrodoro/ui/worker.py:275
+#: src/astrodoro/ui/main.py:2694
+msgid "could not compute {body}: {error}"
+msgstr "não foi possível calcular {body}: {error}"
+
+#: src/astrodoro/ui/worker.py:1235
+msgid "could not create the burst folder: {error}"
+msgstr "não foi possível criar a pasta da rajada: {error}"
+
+#: src/astrodoro/ui/worker.py:341
 msgid "could not create the output folder: {error}"
 msgstr "não foi possível criar a pasta de saída: {error}"
 
-#: src/astrodoro/ui/main.py:2170
+#: src/astrodoro/ui/main.py:3389
 msgid "could not read the sky: {error}"
 msgstr "não foi possível ler o céu: {error}"
 
-#: src/astrodoro/core/tonight.py:164
+#: src/astrodoro/core/lucky.py:157
+msgid "crescent"
+msgstr "foice"
+
+#: src/astrodoro/core/tonight.py:171
 msgid "crossing the meridian now"
 msgstr "cruzando o meridiano agora"
 
-#: src/astrodoro/core/tonight.py:166
+#: src/astrodoro/core/tonight.py:173
 msgid "culminates in {min:.0f} min"
 msgstr "culmina em {min:.0f} min"
 
-#: src/astrodoro/ui/main.py:3193
+#: src/astrodoro/ui/main.py:4490
 msgid "current frame, not stacking"
 msgstr "frame corrente, sem empilhar"
 
-#: src/astrodoro/ui/worker.py:483
-msgid "dark cancelled"
-msgstr "dark cancelado"
+#: src/astrodoro/core/masters.py:151
+msgid "dark of {have:.2f}s against lights of {want:.2f}s — the thermal signal does not cancel"
+msgstr "dark de {have:.2f}s contra lights de {want:.2f}s — o sinal térmico não cancela"
 
-#: src/astrodoro/ui/worker.py:347
-msgid "dark ignored: {got} != {want} (different bin?)"
-msgstr "dark ignorado: {got} != {want} (bin diferente?)"
+#: src/astrodoro/core/masters.py:158
+msgid "dark taken at {have:+.1f} C, sensor now at {want:+.1f} C ({delta:+.1f} C apart)"
+msgstr "dark feito a {have:+.1f} C, sensor agora a {want:+.1f} C ({delta:+.1f} C de diferença)"
 
-#: src/astrodoro/ui/worker.py:494
-msgid "dark interrupted: {error}"
-msgstr "dark interrompido: {error}"
-
-#: src/astrodoro/ui/main.py:2871
+#: src/astrodoro/ui/main.py:4112
 msgid "dark taken {delta:+.1f} C away from the current temperature — thermal residual in the stack"
 msgstr "dark tirado {delta:+.1f} °C fora da temperatura atual — resíduo térmico no stack"
 
-#: src/astrodoro/ui/main.py:3031
+#: src/astrodoro/ui/main.py:4323
 msgid "dark {delta:+.1f} C off"
 msgstr "dark {delta:+.1f} °C fora"
 
-#: src/astrodoro/ui/main.py:907
-msgid "dark: none"
-msgstr "dark: nenhum"
-
-#: src/astrodoro/ui/main.py:1727 src/astrodoro/ui/main.py:3009
-msgid "dark: {name}"
-msgstr "dark: {name}"
-
-#: src/astrodoro/ui/worker.py:351
+#: src/astrodoro/ui/worker.py:482
 msgid "dark: {name} (median {median:.0f})"
 msgstr "dark: {name} (mediana {median:.0f})"
 
-#: src/astrodoro/ui/main.py:1076
+#: src/astrodoro/ui/main.py:1939
 msgid "darks"
 msgstr "darks"
 
-#: src/astrodoro/ui/main.py:1043
-msgid "degree"
-msgstr "grau"
+#: src/astrodoro/ui/worker.py:1302
+msgid "degenerate alignment"
+msgstr "alinhamento degenerado"
 
-#: src/astrodoro/ui/main.py:1417
+#: src/astrodoro/ui/main.py:1549
+msgid "disc"
+msgstr "disco"
+
+#: src/astrodoro/ui/main.py:2884
+msgid "disc balance: R={red:.2f}  B={blue:.2f}"
+msgstr "balanço no disco: R={red:.2f}  B={blue:.2f}"
+
+#: src/astrodoro/ui/main.py:2751
+msgid "disc {pct:.0f}% of the short side of the frame"
+msgstr "disco {pct:.0f}% do lado menor do quadro"
+
+#: src/astrodoro/ui/main.py:2753
+msgid "disc {times:.1f}x the short side — it is a mosaic"
+msgstr "disco {times:.1f}x o lado menor — é mosaico"
+
+#: src/astrodoro/ui/main.py:2272
 msgid "discarded frames"
 msgstr "frames descartados"
 
-#: src/astrodoro/ui/main.py:1148
+#: src/astrodoro/ui/main.py:2011
 msgid "display"
 msgstr "tela"
+
+#: src/astrodoro/ui/main.py:1495
+msgid "display only, like everything on this panel: the frames the burst writes are raw"
+msgstr "só exibição, como tudo neste painel: os quadros que a rajada grava são crus"
 
 #: src/astrodoro/core/catalog.py:27
 msgid "double star"
@@ -818,11 +1155,15 @@ msgstr "baixe {amount}"
 msgid "duplicate"
 msgstr "duplicata"
 
-#: src/astrodoro/ui/main.py:1127
+#: src/astrodoro/ui/main.py:1626
+msgid "duration"
+msgstr "duração"
+
+#: src/astrodoro/ui/main.py:1990
 msgid "elevation"
 msgstr "altitude"
 
-#: src/astrodoro/ui/design.py:337
+#: src/astrodoro/ui/design.py:426
 msgid "elongation"
 msgstr "elongação"
 
@@ -830,35 +1171,43 @@ msgstr "elongação"
 msgid "emission nebula"
 msgstr "nebulosa de emissão"
 
-#: src/astrodoro/ui/worker.py:203
+#: src/astrodoro/ui/worker.py:268
 msgid "end of frames (replay)"
 msgstr "fim dos frames (replay)"
 
-#: src/astrodoro/ui/main.py:1007
+#: src/astrodoro/ui/main.py:1888
+msgid "enough fields — measure one again to check the correction"
+msgstr "campos suficientes — meça um de novo para conferir a correção"
+
+#: src/astrodoro/ui/main.py:2725
+msgid "ephemeris unavailable"
+msgstr "efemérides indisponíveis"
+
+#: src/astrodoro/ui/main.py:1253
 msgid "equalise background"
 msgstr "equalizar fundo"
 
-#: src/astrodoro/ui/main.py:935
+#: src/astrodoro/ui/main.py:1172
 msgid "equatorial platform"
 msgstr "plataforma equatorial"
 
-#: src/astrodoro/ui/main.py:1658
+#: src/astrodoro/ui/main.py:2508
 msgid "error listing cameras: {error}"
 msgstr "erro ao listar câmeras: {error}"
 
-#: src/astrodoro/ui/worker.py:224
+#: src/astrodoro/ui/worker.py:289
 msgid "error on frame {index} ({count} in a row): {error}"
 msgstr "erro no frame {index} ({count} seguidos): {error}"
 
-#: src/astrodoro/ui/worker.py:217
+#: src/astrodoro/ui/worker.py:282
 msgid "error processing frame {index}: {error}"
 msgstr "erro ao processar frame {index}: {error}"
 
-#: src/astrodoro/ui/worker.py:783
+#: src/astrodoro/ui/worker.py:1044
 msgid "error writing sub: {error}"
 msgstr "erro ao gravar sub: {error}"
 
-#: src/astrodoro/ui/worker.py:286
+#: src/astrodoro/ui/worker.py:352
 msgid "error writing the final stack: {error}"
 msgstr "erro ao gravar o stack final: {error}"
 
@@ -866,75 +1215,79 @@ msgstr "erro ao gravar o stack final: {error}"
 msgid "everything"
 msgstr "tudo"
 
-#: src/astrodoro/ui/main.py:472
+#: src/astrodoro/ui/main.py:670
 msgid "exp"
 msgstr "exp"
 
-#: src/astrodoro/ui/main.py:1078
+#: src/astrodoro/ui/main.py:1941
 msgid "exports"
 msgstr "exportações"
 
-#: src/astrodoro/ui/main.py:740
+#: src/astrodoro/ui/main.py:1321
+msgid "exposure"
+msgstr "exposição"
+
+#: src/astrodoro/ui/worker.py:661
+msgid "exposure back to {exp:.2f}s"
+msgstr "exposição de volta para {exp:.2f}s"
+
+#: src/astrodoro/ui/main.py:2803
+msgid "exposure {exp:.4f}s ({factor:.2f}x)"
+msgstr "exposição {exp:.4f}s ({factor:.2f}x)"
+
+#: src/astrodoro/ui/main.py:941
 msgid "faintest magnitude"
 msgstr "magnitude limite"
 
-#: src/astrodoro/ui/main.py:2251
+#: src/astrodoro/ui/main.py:3473
 msgid "fetching…"
 msgstr "baixando…"
+
+#: src/astrodoro/ui/main.py:1777
+msgid "field"
+msgstr "campo"
 
 #: src/astrodoro/ui/skymap.py:408
 msgid "field {fov:.0f}°  ·  scroll to zoom  ·  click a star to align, or search by name above"
 msgstr "campo {fov:.0f}°  ·  roda do mouse aproxima  ·  clique numa estrela alinha, ou procure pelo nome acima"
 
-#: src/astrodoro/core/tonight.py:182
+#: src/astrodoro/ui/main.py:1650
+msgid "fields measured"
+msgstr "campos medidos"
+
+#: src/astrodoro/core/tonight.py:189
 msgid "fills {pct:.0f}% of the frame"
 msgstr "ocupa {pct:.0f}% do campo"
 
-#: src/astrodoro/ui/worker.py:283
+#: src/astrodoro/ui/worker.py:349
 msgid "final stack written to {path}"
 msgstr "stack final gravado em {path}"
 
-#: src/astrodoro/ui/main.py:121
+#: src/astrodoro/ui/main.py:130
 msgid "find and centre the target — live frame, phone sensor and push-to"
 msgstr "achar e centralizar o alvo — frame ao vivo, sensor do celular e push-to"
 
-#: src/astrodoro/ui/main.py:1222
+#: src/astrodoro/core/lucky.py:163
+msgid "first quarter"
+msgstr "quarto crescente"
+
+#: src/astrodoro/ui/main.py:2070
 msgid "fit"
 msgstr "ajustar"
 
-#: src/astrodoro/ui/main.py:1222
+#: src/astrodoro/ui/main.py:2070
 msgid "fit everything on screen"
 msgstr "cabe tudo na tela"
 
-#: src/astrodoro/ui/worker.py:555
-msgid "flat cancelled"
-msgstr "flat cancelado"
-
-#: src/astrodoro/ui/worker.py:398
-msgid "flat ignored: {got} != {want} (different bin?)"
-msgstr "flat ignorado: {got} != {want} (bin diferente?)"
-
-#: src/astrodoro/ui/worker.py:573
-msgid "flat interrupted: {error}"
-msgstr "flat interrompido: {error}"
-
-#: src/astrodoro/ui/main.py:929
-msgid "flat: none"
-msgstr "flat: nenhum"
-
-#: src/astrodoro/ui/main.py:1736 src/astrodoro/ui/main.py:3004
-msgid "flat: {name}"
-msgstr "flat: {name}"
-
-#: src/astrodoro/ui/worker.py:408
+#: src/astrodoro/ui/worker.py:519
 msgid "flat: {name} (corner vignetting {percent:.0f}% of the centre)"
 msgstr "flat: {name} (vinheteamento no canto {percent:.0f}% do centro)"
 
-#: src/astrodoro/ui/main.py:1077
+#: src/astrodoro/ui/main.py:1940
 msgid "flats"
 msgstr "flats"
 
-#: src/astrodoro/ui/design.py:326
+#: src/astrodoro/ui/design.py:415
 msgid "flux spread out"
 msgstr "fluxo espalhado"
 
@@ -942,19 +1295,19 @@ msgstr "fluxo espalhado"
 msgid "flux spread out ({value:.1f}x the core)"
 msgstr "fluxo espalhado ({value:.1f}x o núcleo)"
 
-#: src/astrodoro/ui/main.py:1140
+#: src/astrodoro/ui/main.py:2003
 msgid "focal length"
 msgstr "distância focal"
 
-#: src/astrodoro/ui/main.py:1071
+#: src/astrodoro/ui/main.py:1932
 msgid "folders"
 msgstr "pastas"
 
-#: src/astrodoro/ui/main.py:129
-msgid "folders, observing site, optics and language"
-msgstr "pastas, local, óptica e idioma"
+#: src/astrodoro/ui/main.py:485
+msgid "folders, observing site, optics and language, in a window of its own   ({key})"
+msgstr "pastas, local, óptica e idioma, em uma janela própria   ({key})"
 
-#: src/astrodoro/ui/main.py:634
+#: src/astrodoro/ui/main.py:835
 msgid "folder…"
 msgstr "pasta…"
 
@@ -962,7 +1315,7 @@ msgstr "pasta…"
 msgid "follow the brightest star again — click the image to pin another one"
 msgstr "voltar a seguir a estrela mais brilhante — clique na imagem para fixar outra"
 
-#: src/astrodoro/ui/main.py:692
+#: src/astrodoro/ui/main.py:893
 msgid "follow the clock — untick to plan another hour"
 msgstr "seguir o relógio — desmarque para planejar outro horário"
 
@@ -970,51 +1323,63 @@ msgstr "seguir o relógio — desmarque para planejar outro horário"
 msgid "following the brightest star"
 msgstr "seguindo a estrela mais brilhante"
 
+#: src/astrodoro/ui/main.py:1910
+msgid "for instance {label}"
+msgstr "por exemplo {label}"
+
 #: src/astrodoro/ui/loupe.py:111
 msgid "forget the session's best focus"
 msgstr "esquecer o melhor foco da sessão"
 
-#: src/astrodoro/ui/main.py:778
+#: src/astrodoro/ui/main.py:979
 msgid "forget the target"
 msgstr "esquecer o alvo"
 
-#: src/astrodoro/ui/main.py:3199
+#: src/astrodoro/ui/main.py:4496
 msgid "frame REJECTED · {reason}"
 msgstr "frame REJEITADO · {reason}"
 
-#: src/astrodoro/ui/worker.py:674
+#: src/astrodoro/ui/worker.py:851
 msgid "frame acceptance: {level}"
 msgstr "aceitação de frames: {level}"
 
-#: src/astrodoro/ui/main.py:3195
+#: src/astrodoro/ui/main.py:4492
 msgid "frame accepted · {n} stars"
 msgstr "frame aceito · {n} estrelas"
 
-#: src/astrodoro/ui/main.py:3089
+#: src/astrodoro/ui/main.py:4385
 msgid "frame {index} is no longer in memory — the history keeps the last {n} ({mb:.0f} MB)"
 msgstr "frame {index} não está mais na memória — o histórico guarda os últimos {n} ({mb:.0f} MB)"
 
-#: src/astrodoro/ui/design.py:436
+#: src/astrodoro/ui/design.py:525
 msgid "frame {n}"
 msgstr "frame {n}"
 
-#: src/astrodoro/ui/main.py:2226
+#: src/astrodoro/ui/main.py:3448
 msgid "frame {pct:.0f}%"
 msgstr "campo {pct:.0f}%"
 
-#: src/astrodoro/ui/main.py:2176
+#: src/astrodoro/ui/main.py:3398
 msgid "frame {w:.0f}' x {h:.0f}'"
 msgstr "campo {w:.0f}' x {h:.0f}'"
 
-#: src/astrodoro/ui/main.py:327
+#: src/astrodoro/ui/main.py:1383 src/astrodoro/ui/main.py:517
 msgid "frames"
 msgstr "frames"
 
-#: src/astrodoro/ui/main.py:474
+#: src/astrodoro/core/lucky.py:161
+msgid "full"
+msgstr "cheia"
+
+#: src/astrodoro/core/lucky.py:152
+msgid "full disc"
+msgstr "disco cheio"
+
+#: src/astrodoro/ui/main.py:672
 msgid "gain"
 msgstr "ganho"
 
-#: src/astrodoro/ui/main.py:3283
+#: src/astrodoro/ui/main.py:4563
 msgid "gains: {values}"
 msgstr "ganhos: {values}"
 
@@ -1038,11 +1403,19 @@ msgstr "par de galáxias"
 msgid "galaxy triplet"
 msgstr "trio de galáxias"
 
-#: src/astrodoro/ui/worker.py:657
+#: src/astrodoro/ui/main.py:1431
+msgid "gamma"
+msgstr "gama"
+
+#: src/astrodoro/ui/worker.py:829
 msgid "geometry changed: stack reset"
 msgstr "geometria mudou: stack zerado"
 
-#: src/astrodoro/ui/main.py:826
+#: src/astrodoro/core/lucky.py:154
+msgid "gibbous"
+msgstr "gibosa"
+
+#: src/astrodoro/ui/main.py:1026
 msgid "give better frames more weight"
 msgstr "dar mais peso aos frames melhores"
 
@@ -1054,47 +1427,55 @@ msgstr "aglomerado globular"
 msgid "globular clusters"
 msgstr "aglomerados globulares"
 
-#: src/astrodoro/ui/main.py:772
+#: src/astrodoro/ui/main.py:973
 msgid "go"
 msgstr "ir"
 
-#: src/astrodoro/core/polar.py:132
+#: src/astrodoro/core/polar.py:149
 msgid "good alignment: {total}"
 msgstr "alinhamento bom: {total}"
 
-#: src/astrodoro/ui/main.py:1000
+#: src/astrodoro/ui/main.py:1246
 msgid "green"
 msgstr "verde"
 
-#: src/astrodoro/ui/design.py:339
+#: src/astrodoro/ui/main.py:2864
+msgid "grey-world only means anything on the Moon: {body} has a colour of its own"
+msgstr "o mundo-cinza só significa algo na Lua: {body} tem cor própria"
+
+#: src/astrodoro/core/lucky.py:156
+msgid "half"
+msgstr "meio disco"
+
+#: src/astrodoro/ui/design.py:428
 msgid "halo"
 msgstr "halo"
 
-#: src/astrodoro/ui/main.py:2219
+#: src/astrodoro/ui/main.py:3441
 msgid "has a name"
 msgstr "tem nome próprio"
 
-#: src/astrodoro/ui/design.py:327
+#: src/astrodoro/ui/design.py:416
 msgid "high background"
 msgstr "fundo alto"
 
-#: src/astrodoro/ui/main.py:1402 src/astrodoro/ui/main.py:1449
+#: src/astrodoro/ui/main.py:1512 src/astrodoro/ui/main.py:2257
 msgid "histogram"
 msgstr "histograma"
 
-#: src/astrodoro/ui/worker.py:375
+#: src/astrodoro/ui/worker.py:498
 msgid "hot pixel map: {n} px"
 msgstr "mapa de pixels quentes: {n} px"
 
-#: src/astrodoro/ui/main.py:853
+#: src/astrodoro/ui/main.py:1053
 msgid "how much to demand of each frame for it to be used"
 msgstr "quanto exigir de cada frame para ele entrar"
 
-#: src/astrodoro/ui/main.py:1174
+#: src/astrodoro/ui/main.py:474
 msgid "image only   (F)"
 msgstr "só a imagem   (F)"
 
-#: src/astrodoro/ui/main.py:1079
+#: src/astrodoro/ui/main.py:1942
 msgid "images saved outside a recording session"
 msgstr "imagens salvas fora de uma sessão de gravação"
 
@@ -1102,71 +1483,95 @@ msgstr "imagens salvas fora de uma sessão de gravação"
 msgid "in replay, {names} come from the file and cannot change"
 msgstr "em replay, {names} vem do arquivo e não muda"
 
-#: src/astrodoro/ui/main.py:1170
+#: src/astrodoro/ui/main.py:2028
 msgid "in the dark, cold and without reading glasses, a small target is expensive"
 msgstr "no escuro, com frio e sem óculos, alvo pequeno custa caro"
 
-#: src/astrodoro/ui/worker.py:726
+#: src/astrodoro/ui/worker.py:960
 msgid "integrating: stacking, recording and measuring the residual rotation"
 msgstr "integrando: empilhando, gravando e medindo a rotação residual"
 
-#: src/astrodoro/ui/main.py:326 src/astrodoro/ui/main.py:802
+#: src/astrodoro/ui/main.py:1003 src/astrodoro/ui/main.py:2429 src/astrodoro/ui/main.py:516
 msgid "integration"
 msgstr "integração"
 
-#: src/astrodoro/ui/main.py:2878
+#: src/astrodoro/ui/main.py:4119
 msgid "integration passed the rotation budget ({min:.0f} min): the corner stars are already trailing"
 msgstr "integração passou do orçamento de rotação ({min:.0f} min): estrelas do canto já arrastam"
 
-#: src/astrodoro/ui/worker.py:742
+#: src/astrodoro/ui/worker.py:981
 msgid "integration resumed"
 msgstr "integração retomada"
 
-#: src/astrodoro/ui/worker.py:729
+#: src/astrodoro/ui/worker.py:963
 msgid "integration resumed on the existing accumulator"
 msgstr "integração retomada no acumulador existente"
 
-#: src/astrodoro/ui/worker.py:731
+#: src/astrodoro/ui/worker.py:965
 msgid "integration stopped — capture continues, stack preserved"
 msgstr "integração parada — captura segue, stack preservado"
 
-#: src/astrodoro/ui/worker.py:403 src/astrodoro/ui/worker.py:584
+#: src/astrodoro/ui/worker.py:516 src/astrodoro/ui/worker.py:748
 msgid "invalid flat (median <= 0)"
 msgstr "flat inválido (mediana <= 0)"
 
-#: src/astrodoro/ui/main.py:1157
+#: src/astrodoro/ui/main.py:1675
+msgid "invert the image parity"
+msgstr "inverter a paridade da imagem"
+
+#: src/astrodoro/ui/main.py:1642
+msgid "keep"
+msgstr "guardar"
+
+#: src/astrodoro/ui/main.py:1406
+msgid "keep the body centred"
+msgstr "manter o corpo centrado"
+
+#: src/astrodoro/ui/main.py:2020
 msgid "language"
 msgstr "idioma"
 
-#: src/astrodoro/ui/main.py:1639
+#: src/astrodoro/ui/main.py:2489
 msgid "language will change when the session ends"
 msgstr "o idioma muda quando a sessão terminar"
 
-#: src/astrodoro/ui/main.py:1169
+#: src/astrodoro/ui/main.py:2027
 msgid "large click targets"
 msgstr "alvos de clique grandes"
 
-#: src/astrodoro/core/tonight.py:180
+#: src/astrodoro/core/tonight.py:187
 msgid "larger than the frame"
 msgstr "maior que o campo"
 
-#: src/astrodoro/ui/main.py:1123
+#: src/astrodoro/core/lucky.py:163
+msgid "last quarter"
+msgstr "quarto minguante"
+
+#: src/astrodoro/ui/main.py:1986
 msgid "latitude"
 msgstr "latitude"
 
-#: src/astrodoro/ui/main.py:1124
+#: src/astrodoro/ui/main.py:1987
 msgid "latitude feeds straight into the altitude of the pole: 0.1° of error becomes 6' of alignment error"
 msgstr "a latitude entra direto na altitude do polo: 0,1° de erro vira 6' de erro de alinhamento"
 
-#: src/astrodoro/ui/main.py:140
+#: src/astrodoro/ui/main.py:1376
+msgid "length"
+msgstr "duração"
+
+#: src/astrodoro/ui/main.py:164
 msgid "lenient"
 msgstr "tolerante"
 
-#: src/astrodoro/ui/main.py:977
+#: src/astrodoro/ui/main.py:1403
+msgid "linear, not autostretched: there is no faint signal to lift here, and a stretch built for a nebula flattens the maria into grey"
+msgstr "linear, sem autostretch: aqui não há sinal fraco para levantar, e um stretch feito para nebulosa achata os mares em cinza"
+
+#: src/astrodoro/ui/main.py:1223
 msgid "linked across channels"
 msgstr "ligado entre canais"
 
-#: src/astrodoro/core/stacker.py:278 src/astrodoro/ui/design.py:330
+#: src/astrodoro/core/stacker.py:278 src/astrodoro/ui/design.py:419
 msgid "little signal"
 msgstr "pouco sinal"
 
@@ -1174,23 +1579,27 @@ msgstr "pouco sinal"
 msgid "little signal (transparency or sky background)"
 msgstr "pouco sinal (transparência ou fundo de céu)"
 
-#: src/astrodoro/ui/main.py:1126
+#: src/astrodoro/ui/main.py:477
+msgid "log   (L)"
+msgstr "log   (L)"
+
+#: src/astrodoro/ui/main.py:1989
 msgid "longitude"
 msgstr "longitude"
 
-#: src/astrodoro/ui/main.py:630
+#: src/astrodoro/ui/main.py:831
 msgid "look for cameras again"
 msgstr "reprocurar câmeras"
 
-#: src/astrodoro/ui/main.py:651
+#: src/astrodoro/ui/main.py:852
 msgid "loop"
 msgstr "repetir"
 
-#: src/astrodoro/ui/main.py:871
+#: src/astrodoro/ui/main.py:1081
 msgid "lossless compression, typically 2x"
 msgstr "compressão sem perda, tipicamente 2×"
 
-#: src/astrodoro/ui/main.py:1235
+#: src/astrodoro/ui/main.py:2083
 msgid "loupe"
 msgstr "lupa"
 
@@ -1198,11 +1607,11 @@ msgstr "lupa"
 msgid "loupe 5x"
 msgstr "lupa 5x"
 
-#: src/astrodoro/ui/main.py:2190
+#: src/astrodoro/ui/main.py:3412
 msgid "lower the minimum altitude, allow fainter objects, or try another hour."
 msgstr "baixe a altitude mínima, aceite objetos mais fracos ou tente outro horário."
 
-#: src/astrodoro/core/polar.py:136
+#: src/astrodoro/core/polar.py:153
 msgid "lower the platform {arcmin:.1f}'"
 msgstr "abaixe a plataforma {arcmin:.1f}'"
 
@@ -1210,55 +1619,63 @@ msgstr "abaixe a plataforma {arcmin:.1f}'"
 msgid "mag"
 msgstr "mag"
 
-#: src/astrodoro/ui/main.py:1354
+#: src/astrodoro/ui/main.py:2209
 msgid "make it the target"
 msgstr "definir como alvo"
 
-#: src/astrodoro/ui/main.py:3179
+#: src/astrodoro/ui/main.py:4476
 msgid "map · alt {alt:+.1f}° az {az:.1f}°"
 msgstr "mapa · alt {alt:+.1f}° az {az:.1f}°"
 
-#: src/astrodoro/ui/main.py:3176
+#: src/astrodoro/ui/main.py:4473
 msgid "map · no sensor reading"
 msgstr "mapa · sensor sem leitura"
 
-#: src/astrodoro/ui/main.py:1723
-msgid "master dark"
-msgstr "master dark"
+#: src/astrodoro/ui/worker.py:643
+msgid "master bias -> {path}  (median {median:.0f} ADU, noise {sigma:.1f} ADU)"
+msgstr "bias mestre -> {path}  (mediana {median:.0f} ADU, ruído {sigma:.1f} ADU)"
 
-#: src/astrodoro/ui/worker.py:522
+#: src/astrodoro/ui/worker.py:692
 msgid "master dark -> {path}  ({n} hot pixels, {pct:.4f}%)"
 msgstr "master dark -> {path}  ({n} pixels quentes, {pct:.4f}%)"
 
-#: src/astrodoro/ui/main.py:1732
-msgid "master flat"
-msgstr "master flat"
-
-#: src/astrodoro/ui/worker.py:608
+#: src/astrodoro/ui/worker.py:761
 msgid "master flat -> {path}  (median {pct:.0f}% of scale, corner at {corner:.0f}% of the centre)"
 msgstr "master flat -> {path}  (mediana {pct:.0f}% da escala, canto a {corner:.0f}% do centro)"
 
-#: src/astrodoro/core/equatorial.py:159
+#: src/astrodoro/ui/main.py:2582
+msgid "master {kind}"
+msgstr "{kind} mestre"
+
+#: src/astrodoro/ui/main.py:1639 src/astrodoro/ui/main.py:1721
+msgid "measure this field"
+msgstr "medir este campo"
+
+#: src/astrodoro/core/equatorial.py:169
 msgid "measuring rotation… {n} samples"
 msgstr "medindo rotação… {n} amostras"
 
-#: src/astrodoro/ui/main.py:133
+#: src/astrodoro/ui/worker.py:940
+msgid "measuring the field rotation on {target} — keep the tube on it and do not touch the platform"
+msgstr "medindo a rotação do campo em {target} — mantenha o tubo nele e não toque na plataforma"
+
+#: src/astrodoro/ui/main.py:157
 msgid "medium"
 msgstr "médio"
 
-#: src/astrodoro/ui/main.py:730
+#: src/astrodoro/ui/main.py:931
 msgid "minimum altitude"
 msgstr "altitude mínima"
 
-#: src/astrodoro/ui/main.py:1020
+#: src/astrodoro/ui/main.py:1266
 msgid "multiplies each channel before the stretch, like a white balance. Applies with the stretch linked across channels; unlinked, each channel is already normalised on its own"
 msgstr "multiplica cada canal antes do stretch, como balanço de branco. Vale com o stretch ligado entre canais; desligado, cada canal já é normalizado sozinho"
 
-#: src/astrodoro/ui/main.py:1387
+#: src/astrodoro/ui/main.py:2242
 msgid "named object"
 msgstr "objeto com nome"
 
-#: src/astrodoro/core/tonight.py:121
+#: src/astrodoro/core/tonight.py:128
 msgid "nautical twilight ({alt:.0f}°) — the sky is still bright"
 msgstr "crepúsculo náutico ({alt:.0f}°) — o céu ainda está claro"
 
@@ -1270,31 +1687,43 @@ msgstr "nebulosa"
 msgid "nebulae"
 msgstr "nebulosas"
 
-#: src/astrodoro/ui/main.py:1014
+#: src/astrodoro/ui/main.py:1260 src/astrodoro/ui/main.py:1479
 msgid "neutral"
 msgstr "neutro"
 
-#: src/astrodoro/ui/worker.py:692
+#: src/astrodoro/core/lucky.py:159
+msgid "new"
+msgstr "nova"
+
+#: src/astrodoro/ui/worker.py:883
 msgid "new segment: thresholds relaxed, the reference will be re-extracted from the stack"
 msgstr "novo segmento: limiares relaxados, referência será reextraída do stack"
 
-#: src/astrodoro/ui/main.py:1166
+#: src/astrodoro/ui/main.py:1902
+msgid "next: {alt:.0f}° up, {dir} (RA {ra:.1f}° Dec {dec:+.1f}°)"
+msgstr "próximo: {alt:.0f}° de altura, {dir} (RA {ra:.1f}° Dec {dec:+.1f}°)"
+
+#: src/astrodoro/ui/main.py:2024
 msgid "night brightness"
 msgstr "brilho noturno"
 
-#: src/astrodoro/ui/main.py:1161
+#: src/astrodoro/ui/main.py:472
 msgid "night mode   (N)"
 msgstr "modo noturno   (N)"
 
-#: src/astrodoro/core/source.py:190
+#: src/astrodoro/ui/main.py:2032
+msgid "night mode, image only and the log are on the top bar: they are touched during the night, not before it"
+msgstr "modo noturno, só a imagem e o log ficam na barra de cima: eles se usam durante a noite, não antes dela"
+
+#: src/astrodoro/core/lucky_stack.py:208 src/astrodoro/core/source.py:190
 msgid "no FITS files in {path}"
 msgstr "nenhum FITS em {path}"
 
-#: src/astrodoro/ui/main.py:2068
+#: src/astrodoro/ui/main.py:3274
 msgid "no alignment star above {alt:.0f}°"
 msgstr "nenhuma estrela de alinhamento acima de {alt:.0f}°"
 
-#: src/astrodoro/ui/main.py:1661 src/astrodoro/ui/main.py:1662
+#: src/astrodoro/ui/main.py:2511 src/astrodoro/ui/main.py:2512
 msgid "no camera"
 msgstr "nenhuma câmera"
 
@@ -1302,35 +1731,59 @@ msgstr "nenhuma câmera"
 msgid "no camera found (is another capture program holding it?)"
 msgstr "nenhuma câmera encontrada (outro programa de captura está com ela?)"
 
-#: src/astrodoro/ui/main.py:2162
+#: src/astrodoro/ui/main.py:3381
 msgid "no catalogue — run `astrodoro catalog`"
 msgstr "sem catálogo — rode `astrodoro catalog`"
 
-#: src/astrodoro/ui/main.py:3268
+#: src/astrodoro/ui/main.py:2870
+msgid "no colour image to balance"
+msgstr "nenhuma imagem colorida para balancear"
+
+#: src/astrodoro/ui/main.py:4548
 msgid "no colour image to equalise"
 msgstr "sem imagem colorida para equalizar"
 
-#: src/astrodoro/ui/main.py:2466
+#: src/astrodoro/ui/main.py:3689
 msgid "no compass — not aligned yet"
 msgstr "sem bússola — falta alinhar"
+
+#: src/astrodoro/core/focus.py:252
+msgid "no contrast in the frame"
+msgstr "sem contraste no quadro"
+
+#: src/astrodoro/ui/main.py:2875
+msgid "no disc in the frame to balance on"
+msgstr "nenhum disco no quadro para balancear"
+
+#: src/astrodoro/ui/main.py:2799
+msgid "no frame measured yet"
+msgstr "nenhum quadro medido ainda"
+
+#: src/astrodoro/ui/main.py:2844
+msgid "no frame on screen"
+msgstr "nenhum quadro na tela"
 
 #: src/astrodoro/pointing/handset.py:142
 msgid "no free port between {low} and {high}: {error}"
 msgstr "nenhuma porta livre de {low} a {high}: {error}"
 
-#: src/astrodoro/ui/main.py:2975
+#: src/astrodoro/ui/main.py:4250
 msgid "no limit"
 msgstr "sem limite"
 
-#: src/astrodoro/ui/main.py:2277
+#: src/astrodoro/ui/main.py:3499
 msgid "no preview — offline?"
 msgstr "sem foto — sem internet?"
 
-#: src/astrodoro/ui/main.py:2484
+#: src/astrodoro/ui/main.py:3707
 msgid "no reading — the phone screen went dark or the page closed"
 msgstr "sem leitura — a tela do celular apagou ou a página fechou"
 
-#: src/astrodoro/ui/worker.py:299
+#: src/astrodoro/ui/worker.py:901
+msgid "no reference yet to realign against"
+msgstr "ainda não há referência para realinhar"
+
+#: src/astrodoro/ui/worker.py:365
 msgid "no replay folder selected"
 msgstr "nenhuma pasta de replay selecionada"
 
@@ -1338,39 +1791,51 @@ msgstr "nenhuma pasta de replay selecionada"
 msgid "no sensor reading"
 msgstr "sem leitura do sensor"
 
-#: src/astrodoro/ui/main.py:2731
+#: src/astrodoro/ui/main.py:3955
 msgid "no sensor reading — is the phone connected?"
 msgstr "sem leitura do sensor — o celular está conectado?"
 
-#: src/astrodoro/ui/main.py:3207
+#: src/astrodoro/ui/main.py:4504
 msgid "no stack yet"
 msgstr "nenhum stack ainda"
 
-#: src/astrodoro/ui/main.py:2527 src/astrodoro/ui/main.py:785
+#: src/astrodoro/ui/main.py:3752 src/astrodoro/ui/main.py:986
 msgid "no target"
 msgstr "nenhum alvo"
 
-#: src/astrodoro/ui/main.py:1418 src/astrodoro/ui/main.py:2970
+#: src/astrodoro/ui/main.py:1842
+msgid "no target chosen"
+msgstr "nenhum alvo escolhido"
+
+#: src/astrodoro/ui/main.py:2273 src/astrodoro/ui/main.py:4245
 msgid "none"
 msgstr "nenhum"
+
+#: src/astrodoro/ui/main.py:1651 src/astrodoro/ui/main.py:1851
+msgid "none yet"
+msgstr "nenhum ainda"
 
 #: src/astrodoro/core/catalog.py:29
 msgid "nonexistent"
 msgstr "inexistente"
 
-#: src/astrodoro/ui/main.py:140
+#: src/astrodoro/ui/main.py:164
 msgid "normal"
 msgstr "normal"
 
-#: src/astrodoro/ui/main.py:3186 src/astrodoro/ui/skymap.py:418
+#: src/astrodoro/ui/main.py:4483 src/astrodoro/ui/skymap.py:418
 msgid "not aligned"
 msgstr "sem alinhamento"
 
-#: src/astrodoro/ui/worker.py:496
+#: src/astrodoro/ui/worker.py:638
+msgid "not enough frames for a bias"
+msgstr "frames insuficientes para um bias"
+
+#: src/astrodoro/ui/worker.py:684
 msgid "not enough frames for a dark"
 msgstr "frames insuficientes para o dark"
 
-#: src/astrodoro/ui/worker.py:575
+#: src/astrodoro/ui/worker.py:735
 msgid "not enough frames for a flat"
 msgstr "frames insuficientes para o flat"
 
@@ -1378,27 +1843,35 @@ msgstr "frames insuficientes para o flat"
 msgid "not enough pairs after removing duplicates"
 msgstr "pares insuficientes após remover duplicatas"
 
-#: src/astrodoro/ui/main.py:3243
-msgid "not enough samples"
-msgstr "amostras insuficientes"
-
-#: src/astrodoro/core/focus.py:97 src/astrodoro/core/register.py:50
+#: src/astrodoro/core/focus.py:102 src/astrodoro/core/register.py:50
 msgid "not enough stars"
 msgstr "estrelas insuficientes"
 
-#: src/astrodoro/ui/main.py:1708
+#: src/astrodoro/ui/main.py:2558
 msgid "nothing accumulated to reset"
 msgstr "nada acumulado para zerar"
 
-#: src/astrodoro/ui/main.py:2553
+#: src/astrodoro/core/lucky.py:475
+msgid "nothing bright in the frame"
+msgstr "nada brilhante no quadro"
+
+#: src/astrodoro/ui/main.py:3778
 msgid "nothing catalogued in the field"
 msgstr "nada catalogado no campo"
 
-#: src/astrodoro/ui/main.py:2188
+#: src/astrodoro/ui/main.py:1918
+msgid "nothing measured yet"
+msgstr "nada medido ainda"
+
+#: src/astrodoro/ui/main.py:3410
 msgid "nothing passes these filters at this hour"
 msgstr "nada passa por estes filtros neste horário"
 
-#: src/astrodoro/ui/main.py:1887
+#: src/astrodoro/ui/main.py:1899
+msgid "nothing suitable above the horizon"
+msgstr "nada adequado acima do horizonte"
+
+#: src/astrodoro/ui/main.py:3088
 msgid "nothing to save"
 msgstr "nada para salvar"
 
@@ -1406,7 +1879,7 @@ msgstr "nada para salvar"
 msgid "nova"
 msgstr "nova"
 
-#: src/astrodoro/ui/main.py:688
+#: src/astrodoro/ui/main.py:889
 msgid "now"
 msgstr "agora"
 
@@ -1414,35 +1887,43 @@ msgstr "agora"
 msgid "object"
 msgstr "objeto"
 
-#: src/astrodoro/ui/main.py:1107
+#: src/astrodoro/ui/main.py:1970
 msgid "observing site and optics"
 msgstr "local e óptica"
 
-#: src/astrodoro/ui/main.py:2417 src/astrodoro/ui/main.py:562
+#: src/astrodoro/ui/main.py:3639 src/astrodoro/ui/main.py:760
 msgid "off"
 msgstr "desligado"
 
-#: src/astrodoro/ui/main.py:493
+#: src/astrodoro/ui/main.py:691
 msgid "offset"
 msgstr "offset"
 
-#: src/astrodoro/ui/main.py:484
+#: src/astrodoro/ui/main.py:682
 msgid "offset 0 truncates the left tail of the noise"
 msgstr "offset 0 trunca a cauda esquerda do ruído"
+
+#: src/astrodoro/ui/main.py:4168
+msgid "on target"
+msgstr "no alvo"
 
 #: src/astrodoro/pointing/pushto.py:77
 msgid "on target — {arcmin:.1f}' from the centre"
 msgstr "no alvo — {arcmin:.1f}' do centro"
 
-#: src/astrodoro/ui/main.py:1223
+#: src/astrodoro/ui/main.py:2071
 msgid "one sensor pixel per screen pixel"
 msgstr "um pixel do sensor por pixel de tela"
 
-#: src/astrodoro/ui/main.py:742
+#: src/astrodoro/core/platform_align.py:334
+msgid "one target only: this is the error along that direction, not the whole of it — measure a second one"
+msgstr "um alvo só: este é o erro naquela direção, não o erro inteiro — meça um segundo"
+
+#: src/astrodoro/ui/main.py:943
 msgid "only what fits in the frame"
 msgstr "só o que cabe no campo"
 
-#: src/astrodoro/core/tonight.py:174
+#: src/astrodoro/core/tonight.py:181
 msgid "only {min:.0f} min left before it gets too low"
 msgstr "restam só {min:.0f} min antes de ficar baixo demais"
 
@@ -1462,6 +1943,10 @@ msgstr "só {n} estrelas detectadas"
 msgid "only {n} stars voted together"
 msgstr "apenas {n} estrelas votaram junto"
 
+#: src/astrodoro/core/platform_align.py:127
+msgid "only {n} stars — the field is too poor to measure"
+msgstr "só {n} estrelas — o campo é pobre demais para medir"
+
 #: src/astrodoro/core/catalog.py:22
 msgid "open cluster"
 msgstr "aglomerado aberto"
@@ -1470,11 +1955,11 @@ msgstr "aglomerado aberto"
 msgid "open clusters"
 msgstr "aglomerados abertos"
 
-#: src/astrodoro/ui/main.py:603
+#: src/astrodoro/ui/main.py:804
 msgid "open the map and align   (M)"
 msgstr "abrir o mapa e alinhar   (M)"
 
-#: src/astrodoro/ui/main.py:1097
+#: src/astrodoro/ui/main.py:1960
 msgid "open the sessions folder"
 msgstr "abrir a pasta de sessões"
 
@@ -1482,25 +1967,45 @@ msgstr "abrir a pasta de sessões"
 msgid "other"
 msgstr "outro"
 
-#: src/astrodoro/ui/design.py:455
+#: src/astrodoro/ui/design.py:544
 msgid "out of memory — image not kept"
 msgstr "fora da memória — imagem não guardada"
 
-#: src/astrodoro/ui/main.py:840
+#: src/astrodoro/ui/main.py:1040
 msgid "outlier rejection"
 msgstr "descarte de outlier"
 
-#: src/astrodoro/core/tonight.py:169
+#: src/astrodoro/ui/main.py:1916
+msgid "parity {sign:+d}"
+msgstr "paridade {sign:+d}"
+
+#: src/astrodoro/core/tonight.py:176
 msgid "past the meridian {min:.0f} min ago"
 msgstr "passou do meridiano há {min:.0f} min"
 
-#: src/astrodoro/ui/worker.py:185
+#: src/astrodoro/ui/worker.py:897
+msgid "paused for manual recentring — nudge the tube until the arrow on the image disappears"
+msgstr "pausado para recentragem manual — empurre o tubo até a seta na imagem sumir"
+
+#: src/astrodoro/ui/worker.py:250
 msgid "paused — camera open, stack and recording preserved"
 msgstr "pausado — câmera aberta, stack e gravação preservados"
 
-#: src/astrodoro/ui/main.py:998
+#: src/astrodoro/ui/main.py:1528
+msgid "peak"
+msgstr "pico"
+
+#: src/astrodoro/core/lucky.py:482
+msgid "peak at {pct:.0f}% of scale — good"
+msgstr "pico em {pct:.0f}% da escala — bom"
+
+#: src/astrodoro/ui/main.py:1244
 msgid "per-channel gain"
 msgstr "ganho por canal"
+
+#: src/astrodoro/ui/main.py:1547
+msgid "phase"
+msgstr "fase"
 
 #: src/astrodoro/pointing/handset.py:244
 msgid "phone connected"
@@ -1510,7 +2015,7 @@ msgstr "celular conectado"
 msgid "phone disconnected"
 msgstr "celular desconectado"
 
-#: src/astrodoro/ui/main.py:2458
+#: src/astrodoro/ui/main.py:3681
 msgid "phone disconnected — scan the QR again"
 msgstr "celular desconectado — leia o QR de novo"
 
@@ -1522,11 +2027,11 @@ msgstr "celular: aguardando em {url}"
 msgid "phone: {agent}"
 msgstr "celular: {agent}"
 
-#: src/astrodoro/ui/main.py:2205 src/astrodoro/ui/previews.py:92
+#: src/astrodoro/ui/main.py:3427 src/astrodoro/ui/previews.py:92
 msgid "pick an object"
 msgstr "escolha um objeto"
 
-#: src/astrodoro/ui/main.py:1345
+#: src/astrodoro/ui/main.py:2200
 msgid "pick an object from the list"
 msgstr "escolha um objeto da lista"
 
@@ -1534,13 +2039,17 @@ msgstr "escolha um objeto da lista"
 msgid "pinned at {x:.0f}, {y:.0f}"
 msgstr "fixada em {x:.0f}, {y:.0f}"
 
-#: src/astrodoro/ui/worker.py:326
+#: src/astrodoro/ui/worker.py:399
 msgid "pipeline linearised: {changes}"
 msgstr "pipeline linearizado: {changes}"
 
-#: src/astrodoro/ui/main.py:1141
+#: src/astrodoro/ui/main.py:2004
 msgid "pixel"
 msgstr "pixel"
+
+#: src/astrodoro/core/catalog.py:31
+msgid "planet"
+msgstr "planeta"
 
 #: src/astrodoro/core/catalog.py:23
 msgid "planetary nebula"
@@ -1550,71 +2059,79 @@ msgstr "nebulosa planetária"
 msgid "planetary nebulae"
 msgstr "nebulosas planetárias"
 
-#: src/astrodoro/ui/main.py:586
+#: src/astrodoro/ui/main.py:1660
+msgid "point at it"
+msgstr "apontar para ele"
+
+#: src/astrodoro/ui/main.py:787
 msgid "point the tube at this star first — the alignment reads the sensor now"
 msgstr "aponte o tubo para esta estrela antes — o alinhamento lê o sensor agora"
 
-#: src/astrodoro/ui/main.py:2197 src/astrodoro/ui/main.py:2243
+#: src/astrodoro/ui/main.py:3419 src/astrodoro/ui/main.py:3465
 msgid "previews are off"
 msgstr "fotos desligadas"
 
-#: src/astrodoro/ui/main.py:2287
+#: src/astrodoro/ui/main.py:3509
 msgid "previews are off — tick the box first"
 msgstr "as fotos estão desligadas — marque a caixa primeiro"
 
-#: src/astrodoro/ui/main.py:2295
+#: src/astrodoro/ui/main.py:3517
 msgid "previews: {n} already cached, fetching {m}"
 msgstr "fotos: {n} já em cache, baixando {m}"
 
-#: src/astrodoro/core/polar.py:138
+#: src/astrodoro/core/polar.py:155
 msgid "raise the platform {arcmin:.1f}'"
 msgstr "levante a plataforma {arcmin:.1f}'"
 
-#: src/astrodoro/ui/main.py:137
+#: src/astrodoro/ui/main.py:161
 msgid "real time"
 msgstr "tempo real"
 
-#: src/astrodoro/ui/main.py:865
+#: src/astrodoro/ui/main.py:1075
 msgid "record raw subs"
 msgstr "gravar subs brutos"
 
-#: src/astrodoro/ui/main.py:1671
+#: src/astrodoro/ui/main.py:2521
 msgid "recorded session"
 msgstr "sessão gravada"
 
-#: src/astrodoro/ui/worker.py:470
-msgid "recording a dark needs the camera, not a replay"
-msgstr "gravar dark só funciona com a câmera, não em replay"
+#: src/astrodoro/ui/main.py:2959
+msgid "recording a bias of {n} frames — keep the sensor capped"
+msgstr "gravando um bias de {n} frames — mantenha o sensor tampado"
 
-#: src/astrodoro/ui/main.py:1787
+#: src/astrodoro/ui/main.py:2976
 msgid "recording a dark of {n} frames — keep the sensor capped"
 msgstr "gravando dark de {n} frames — não descubra o sensor"
 
-#: src/astrodoro/ui/worker.py:544
-msgid "recording a flat needs the camera, not a replay"
-msgstr "gravar flat só funciona com a câmera, não em replay"
-
-#: src/astrodoro/ui/main.py:1806
+#: src/astrodoro/ui/main.py:2996
 msgid "recording a flat of {n} frames — do not change the lighting"
 msgstr "gravando flat de {n} frames — não mexa na iluminação"
 
-#: src/astrodoro/ui/worker.py:475
+#: src/astrodoro/ui/worker.py:606
+msgid "recording a {kind} needs the camera, not a replay"
+msgstr "gravar um {kind} precisa da câmera, não de um replay"
+
+#: src/astrodoro/ui/worker.py:631
+msgid "recording bias: {n} frames of {exp:.0f} us, gain {gain}, offset {offset}, bin{bin} — keep the sensor capped"
+msgstr "gravando bias: {n} frames de {exp:.0f} us, ganho {gain}, offset {offset}, bin{bin} — mantenha o sensor tampado"
+
+#: src/astrodoro/ui/worker.py:677
 msgid "recording dark: {n} frames of {exp:.2f}s, gain {gain}, bin{bin}"
 msgstr "gravando dark: {n} frames de {exp:.2f}s, ganho {gain}, bin{bin}"
 
-#: src/astrodoro/ui/worker.py:548
+#: src/astrodoro/ui/worker.py:719
 msgid "recording flat: {n} frames of {exp:.2f}s, gain {gain}, bin{bin}"
 msgstr "gravando flat: {n} frames de {exp:.2f}s, ganho {gain}, bin{bin}"
 
-#: src/astrodoro/ui/worker.py:319 src/astrodoro/ui/worker.py:686
+#: src/astrodoro/ui/worker.py:392 src/astrodoro/ui/worker.py:874
 msgid "recording to {path}"
 msgstr "gravando em {path}"
 
-#: src/astrodoro/ui/main.py:999
+#: src/astrodoro/ui/main.py:1245 src/astrodoro/ui/main.py:1458
 msgid "red"
 msgstr "vermelho"
 
-#: src/astrodoro/ui/design.py:332
+#: src/astrodoro/ui/design.py:421
 msgid "reference frame"
 msgstr "referencial"
 
@@ -1630,51 +2147,63 @@ msgstr "referencial iniciado"
 msgid "reflection nebula"
 msgstr "nebulosa de reflexão"
 
-#: src/astrodoro/ui/design.py:329
+#: src/astrodoro/ui/design.py:418
 msgid "registration"
 msgstr "registro"
 
-#: src/astrodoro/ui/design.py:438
+#: src/astrodoro/ui/design.py:527
 msgid "rejected"
 msgstr "rejeitado"
 
-#: src/astrodoro/ui/design.py:440 src/astrodoro/ui/main.py:3147
+#: src/astrodoro/ui/design.py:529 src/astrodoro/ui/main.py:4443
 msgid "rejected — {reason}"
 msgstr "rejeitado — {reason}"
 
-#: src/astrodoro/ui/main.py:2955
+#: src/astrodoro/ui/main.py:4230
 msgid "rejected: {reason} ({n} stars, FWHM {fwhm:.2f})"
 msgstr "rejeitado: {reason} ({n} estrelas, FWHM {fwhm:.2f})"
 
-#: src/astrodoro/ui/main.py:1027
-msgid "remove gradient"
-msgstr "remover gradiente"
-
-#: src/astrodoro/ui/main.py:841
+#: src/astrodoro/ui/main.py:1041
 msgid "removes satellites and aircraft from the stack. 0 disables it"
 msgstr "tira satélite e avião do stack. 0 desliga"
 
-#: src/astrodoro/ui/main.py:617
+#: src/astrodoro/ui/main.py:818
 msgid "replay"
 msgstr "replay"
 
-#: src/astrodoro/ui/main.py:1674
+#: src/astrodoro/ui/main.py:2524
 msgid "replay: {path}"
 msgstr "replay: {path}"
 
-#: src/astrodoro/ui/main.py:1428
+#: src/astrodoro/ui/main.py:2283
 msgid "residual rotation"
 msgstr "rotação residual"
 
-#: src/astrodoro/core/equatorial.py:163
+#: src/astrodoro/core/platform_align.py:399
+msgid "residual rotation barely moved ({before:.4f} to {after:.4f} deg/min) — either the correction was too small to see or it was not applied"
+msgstr "a rotação residual quase não mudou ({before:.4f} para {after:.4f}°/min) — ou a correção foi pequena demais para aparecer, ou não foi aplicada"
+
+#: src/astrodoro/core/platform_align.py:391
+msgid "residual rotation fell from {before:.4f} to {after:.4f} deg/min"
+msgstr "a rotação residual caiu de {before:.4f} para {after:.4f}°/min"
+
+#: src/astrodoro/core/platform_align.py:394
+msgid "residual rotation rose from {before:.4f} to {after:.4f} deg/min — the correction was applied backwards: invert the image parity in the settings and align again"
+msgstr "a rotação residual subiu de {before:.4f} para {after:.4f}°/min — a correção foi aplicada ao contrário: inverta a paridade da imagem nas configurações e alinhe de novo"
+
+#: src/astrodoro/core/equatorial.py:173
 msgid "residual rotation {rate:.3f} deg/min"
 msgstr "rotação residual {rate:.3f}°/min"
 
-#: src/astrodoro/ui/worker.py:193
+#: src/astrodoro/ui/worker.py:258
 msgid "resumed"
 msgstr "retomado"
 
-#: src/astrodoro/ui/main.py:1015
+#: src/astrodoro/ui/main.py:1480
+msgid "returns both gains to 1.00"
+msgstr "devolve os dois ganhos a 1,00"
+
+#: src/astrodoro/ui/main.py:1261
 msgid "returns the three gains to 1.00"
 msgstr "volta os três ganhos para 1,00"
 
@@ -1682,43 +2211,43 @@ msgstr "volta os três ganhos para 1,00"
 msgid "rms {rms:.2f} px above the limit"
 msgstr "rms {rms:.2f} px acima do limite"
 
-#: src/astrodoro/ui/main.py:1075
+#: src/astrodoro/ui/main.py:1936
 msgid "root of the recorded sessions: subs, stacks and previews"
 msgstr "raiz das sessões gravadas: subs, stacks e previews"
 
-#: src/astrodoro/core/polar.py:144
+#: src/astrodoro/core/polar.py:161
 msgid "rotate {arcmin:.1f}' east"
 msgstr "gire {arcmin:.1f}' para leste"
 
-#: src/astrodoro/core/polar.py:142
+#: src/astrodoro/core/polar.py:159
 msgid "rotate {arcmin:.1f}' west"
 msgstr "gire {arcmin:.1f}' para oeste"
 
-#: src/astrodoro/ui/main.py:1433
+#: src/astrodoro/ui/main.py:2288
 msgid "rotation"
 msgstr "rotação"
 
-#: src/astrodoro/ui/main.py:990
+#: src/astrodoro/ui/main.py:1236 src/astrodoro/ui/main.py:1487
 msgid "saturation"
 msgstr "saturação"
 
-#: src/astrodoro/ui/main.py:1224
+#: src/astrodoro/ui/main.py:2072
 msgid "save"
 msgstr "salvar"
 
-#: src/astrodoro/ui/main.py:1900 src/astrodoro/ui/main.py:1911
+#: src/astrodoro/ui/main.py:3101 src/astrodoro/ui/main.py:3112
 msgid "saved: {path}"
 msgstr "salvo: {path}"
 
-#: src/astrodoro/ui/main.py:1224
+#: src/astrodoro/ui/main.py:2072
 msgid "saves the image as it looks right now (Ctrl+S) — a new file each time"
 msgstr "guarda a imagem como está agora (Ctrl+S) — um arquivo novo a cada vez"
 
-#: src/astrodoro/ui/main.py:2903
+#: src/astrodoro/ui/main.py:4148
 msgid "scale 0..{full}"
 msgstr "escala 0..{full}"
 
-#: src/astrodoro/ui/main.py:2408
+#: src/astrodoro/ui/main.py:3630
 msgid "scan the QR code with the phone"
 msgstr "leia o QR no celular"
 
@@ -1726,11 +2255,11 @@ msgstr "leia o QR no celular"
 msgid "score"
 msgstr "nota"
 
-#: src/astrodoro/ui/main.py:1361
+#: src/astrodoro/ui/main.py:2216
 msgid "see on the map"
 msgstr "ver no mapa"
 
-#: src/astrodoro/ui/main.py:2409
+#: src/astrodoro/ui/main.py:3631
 msgid "sensor at {url}"
 msgstr "sensor em {url}"
 
@@ -1738,47 +2267,51 @@ msgstr "sensor em {url}"
 msgid "sensor off — switch the phone on in the panel"
 msgstr "sensor desligado — ligue o celular no painel"
 
-#: src/astrodoro/ui/main.py:2400
+#: src/astrodoro/ui/main.py:3622
 msgid "sensor: {error}"
 msgstr "sensor: {error}"
 
-#: src/astrodoro/ui/worker.py:708
+#: src/astrodoro/ui/worker.py:921
 msgid "session best focus reset"
 msgstr "melhor foco da sessão zerado"
 
-#: src/astrodoro/ui/main.py:3074
+#: src/astrodoro/ui/worker.py:783
+msgid "session dark"
+msgstr "dark da sessão"
+
+#: src/astrodoro/ui/main.py:4370
 msgid "session ended"
 msgstr "sessão encerrada"
 
-#: src/astrodoro/ui/main.py:1074
+#: src/astrodoro/ui/main.py:1935
 msgid "sessions"
 msgstr "sessões"
 
-#: src/astrodoro/ui/main.py:1357
+#: src/astrodoro/ui/main.py:2212
 msgid "sets the target and opens FRAME, where the arrow says which way to push"
 msgstr "define o alvo e abre ENQUADRAR, onde a seta diz para que lado empurrar"
 
-#: src/astrodoro/ui/design.py:331
+#: src/astrodoro/ui/design.py:420
 msgid "settling"
 msgstr "assentando"
 
-#: src/astrodoro/ui/main.py:974
+#: src/astrodoro/ui/main.py:1220
 msgid "shadows"
 msgstr "sombras"
 
-#: src/astrodoro/ui/main.py:747
+#: src/astrodoro/ui/main.py:1530 src/astrodoro/ui/main.py:2428
+msgid "sharpness"
+msgstr "nitidez"
+
+#: src/astrodoro/ui/main.py:948
 msgid "show a photo of the object"
 msgstr "mostrar uma foto do objeto"
 
-#: src/astrodoro/ui/main.py:596
+#: src/astrodoro/ui/main.py:797
 msgid "show it on the sky map"
 msgstr "mostrar no mapa do céu"
 
-#: src/astrodoro/ui/main.py:1179
-msgid "show the log   (L)"
-msgstr "mostrar log   (L)"
-
-#: src/astrodoro/ui/worker.py:678
+#: src/astrodoro/ui/worker.py:855
 msgid "sigma clip changed: stack reset"
 msgstr "sigma clip alterado: stack zerado"
 
@@ -1790,23 +2323,23 @@ msgstr "ajuste de similaridade falhou"
 msgid "size"
 msgstr "tamanho"
 
-#: src/astrodoro/ui/main.py:1382
+#: src/astrodoro/ui/main.py:2237
 msgid "size in frame"
 msgstr "tamanho no campo"
 
-#: src/astrodoro/ui/main.py:2227
+#: src/astrodoro/ui/main.py:3449
 msgid "size unknown"
 msgstr "tamanho desconhecido"
 
-#: src/astrodoro/ui/main.py:133
+#: src/astrodoro/ui/main.py:157
 msgid "soft"
 msgstr "suave"
 
-#: src/astrodoro/ui/main.py:652
+#: src/astrodoro/ui/main.py:853
 msgid "speed"
 msgstr "velocidade"
 
-#: src/astrodoro/ui/main.py:3022
+#: src/astrodoro/ui/main.py:4314
 msgid "stable"
 msgstr "estável"
 
@@ -1814,15 +2347,15 @@ msgstr "estável"
 msgid "stable at {current:+.1f} C, TEC at {power}%"
 msgstr "estável em {current:+.1f} °C, TEC em {power}%"
 
-#: src/astrodoro/ui/main.py:1719 src/astrodoro/ui/worker.py:697
+#: src/astrodoro/ui/main.py:2569 src/astrodoro/ui/worker.py:888
 msgid "stack reset"
 msgstr "stack zerado"
 
-#: src/astrodoro/ui/main.py:127
+#: src/astrodoro/ui/main.py:136
 msgid "stack, record and follow the platform"
 msgstr "empilhar, gravar e acompanhar a plataforma"
 
-#: src/astrodoro/ui/main.py:825
+#: src/astrodoro/ui/main.py:1025
 msgid "stacking"
 msgstr "empilhamento"
 
@@ -1830,7 +2363,7 @@ msgstr "empilhamento"
 msgid "star"
 msgstr "estrela"
 
-#: src/astrodoro/ui/main.py:572
+#: src/astrodoro/ui/main.py:773
 msgid "star to align on"
 msgstr "estrela para alinhar"
 
@@ -1842,27 +2375,51 @@ msgstr "estrela mag {mag:.1f}"
 msgid "star: aligns · object: becomes target"
 msgstr "estrela: alinha · objeto: vira alvo"
 
-#: src/astrodoro/ui/design.py:340
+#: src/astrodoro/ui/design.py:429
 msgid "stars"
 msgstr "estrelas"
 
-#: src/astrodoro/ui/main.py:1775
+#: src/astrodoro/ui/main.py:1663
+msgid "start over"
+msgstr "recomeçar"
+
+#: src/astrodoro/ui/main.py:1322
+msgid "start the capture"
+msgstr "inicie a captura"
+
+#: src/astrodoro/ui/main.py:1729
+msgid "start the capture before measuring the alignment"
+msgstr "ligue a captura antes de medir o alinhamento"
+
+#: src/astrodoro/ui/main.py:2945
+msgid "start the capture before recording a bias"
+msgstr "inicie a captura antes de gravar um bias"
+
+#: src/astrodoro/ui/main.py:2898
+msgid "start the capture before recording a burst"
+msgstr "inicie a captura antes de gravar uma rajada"
+
+#: src/astrodoro/ui/main.py:2964
 msgid "start the capture before recording a dark"
 msgstr "inicie a captura antes de gravar o dark"
 
-#: src/astrodoro/ui/main.py:1792
+#: src/astrodoro/ui/main.py:2981
 msgid "start the capture before recording a flat"
 msgstr "inicie a captura antes de gravar o flat"
 
-#: src/astrodoro/ui/main.py:1771
+#: src/astrodoro/ui/main.py:2657 src/astrodoro/ui/main.py:2661
 msgid "start the capture first"
 msgstr "inicie a captura primeiro"
 
-#: src/astrodoro/ui/main.py:323
+#: src/astrodoro/ui/main.py:513
 msgid "state"
 msgstr "estado"
 
-#: src/astrodoro/core/tonight.py:172
+#: src/astrodoro/ui/main.py:1776
+msgid "station kept: {name} at {rate:+.4f} deg/min"
+msgstr "campo guardado: {name} a {rate:+.4f}°/min"
+
+#: src/astrodoro/core/tonight.py:179
 msgid "stays up all night"
 msgstr "fica no céu a noite toda"
 
@@ -1870,23 +2427,27 @@ msgstr "fica no céu a noite toda"
 msgid "stellar association"
 msgstr "associação estelar"
 
-#: src/astrodoro/ui/main.py:950
+#: src/astrodoro/ui/main.py:1720
+msgid "stop"
+msgstr "parar"
+
+#: src/astrodoro/ui/main.py:1196
 msgid "stretch"
 msgstr "stretch"
 
-#: src/astrodoro/ui/main.py:3279
+#: src/astrodoro/ui/main.py:4559
 msgid "stretch linked across channels — that is what makes the per-channel gain visible"
 msgstr "stretch ligado entre canais — é o que deixa o ganho por canal aparecer"
 
-#: src/astrodoro/ui/main.py:140
+#: src/astrodoro/ui/main.py:164
 msgid "strict"
 msgstr "rigoroso"
 
-#: src/astrodoro/ui/main.py:134
+#: src/astrodoro/ui/main.py:158
 msgid "strong"
 msgstr "forte"
 
-#: src/astrodoro/ui/main.py:1344
+#: src/astrodoro/ui/main.py:2199
 msgid "suggestion"
 msgstr "sugestão"
 
@@ -1894,19 +2455,19 @@ msgstr "sugestão"
 msgid "supernova remnant"
 msgstr "remanescente de supernova"
 
-#: src/astrodoro/ui/main.py:1383
+#: src/astrodoro/ui/main.py:2238
 msgid "surface brightness"
 msgstr "brilho superficial"
 
-#: src/astrodoro/core/tonight.py:185
+#: src/astrodoro/core/tonight.py:192
 msgid "surface brightness {sb:.1f} mag/arcsec²"
 msgstr "brilho superficial {sb:.1f} mag/arcsec²"
 
-#: src/astrodoro/ui/main.py:2610 src/astrodoro/ui/main.py:325 src/astrodoro/ui/main.py:522
+#: src/astrodoro/ui/main.py:3835 src/astrodoro/ui/main.py:515 src/astrodoro/ui/main.py:720
 msgid "target"
 msgstr "alvo"
 
-#: src/astrodoro/ui/main.py:864
+#: src/astrodoro/ui/main.py:1074
 msgid "target and recording"
 msgstr "alvo e gravação"
 
@@ -1914,47 +2475,87 @@ msgstr "alvo e gravação"
 msgid "target below the horizon (altitude {alt:.1f} deg)"
 msgstr "alvo abaixo do horizonte (altitude {alt:.1f}°)"
 
-#: src/astrodoro/ui/main.py:1304
+#: src/astrodoro/ui/main.py:2159
 msgid "target direction"
 msgstr "direção do alvo"
 
-#: src/astrodoro/ui/main.py:2535
+#: src/astrodoro/ui/main.py:3760
 msgid "target forgotten"
 msgstr "alvo esquecido"
 
-#: src/astrodoro/ui/main.py:3028
+#: src/astrodoro/ui/main.py:4320
 msgid "target unreachable"
 msgstr "alvo inalcançável"
 
-#: src/astrodoro/core/tonight.py:115
+#: src/astrodoro/ui/main.py:138
+msgid "the Moon and the planets: nothing to stack — exposure guard, contrast focus and burst recording"
+msgstr "a Lua e os planetas: nada a empilhar — guarda de exposição, foco por contraste e gravação de rajadas"
+
+#: src/astrodoro/ui/main.py:1300
+msgid "the Sun is deliberately absent: nothing here can know whether there is a filter on the tube"
+msgstr "o Sol está deliberadamente ausente: nada aqui tem como saber se há filtro no tubo"
+
+#: src/astrodoro/core/tonight.py:122
 msgid "the Sun is up ({alt:.0f}°) — nothing to image yet"
 msgstr "o Sol está acima do horizonte ({alt:.0f}°) — ainda não há o que fotografar"
 
-#: src/astrodoro/ui/main.py:2735
+#: src/astrodoro/ui/main.py:1292
+msgid "the body right now"
+msgstr "o corpo agora"
+
+#: src/astrodoro/ui/worker.py:465
+msgid "the dark in force already contains the bias — the bias is not subtracted twice"
+msgstr "o dark em uso já contém o bias — o bias não é subtraído duas vezes"
+
+#: src/astrodoro/ui/main.py:4104
+msgid "the disc is clipping on {pct:.2f}% of the measured window — shorten the exposure"
+msgstr "o disco está saturando em {pct:.2f}% da janela medida — encurte a exposição"
+
+#: src/astrodoro/core/platform_align.py:337
+msgid "the targets are too close together on the sky for the correction to separate altitude from azimuth"
+msgstr "os alvos estão próximos demais no céu para a correção separar altitude de azimute"
+
+#: src/astrodoro/core/platform_align.py:340
+msgid "the targets disagree by {rate:.3f} deg/min — one of the measurements is noisy"
+msgstr "os alvos discordam em {rate:.3f}°/min — uma das medições está ruidosa"
+
+#: src/astrodoro/ui/main.py:3959
 msgid "the tube is moving ({deg:.1f}° in the last half second) — wait for it to settle and click again"
 msgstr "o tubo está se movendo ({deg:.1f}° na última meia segundo) — espere parar e clique de novo"
 
-#: src/astrodoro/ui/main.py:709
+#: src/astrodoro/ui/main.py:910
 msgid "the two things that limit every target tonight: how dark it is and where the Moon is"
 msgstr "as duas coisas que limitam todo alvo hoje: o quanto está escuro e onde está a Lua"
 
-#: src/astrodoro/ui/main.py:1380 src/astrodoro/ui/targets.py:30
+#: src/astrodoro/ui/main.py:1542
+msgid "this body"
+msgstr "este corpo"
+
+#: src/astrodoro/ui/main.py:1615 src/astrodoro/ui/worker.py:942
+msgid "this field"
+msgstr "este campo"
+
+#: src/astrodoro/ui/main.py:1523
+msgid "this frame"
+msgstr "este quadro"
+
+#: src/astrodoro/ui/main.py:2235 src/astrodoro/ui/targets.py:30
 msgid "time left"
 msgstr "tempo restante"
 
-#: src/astrodoro/ui/design.py:324
+#: src/astrodoro/ui/design.py:413 src/astrodoro/ui/worker.py:1293
 msgid "too few stars"
 msgstr "poucas estrelas"
 
-#: src/astrodoro/ui/main.py:2968
+#: src/astrodoro/ui/main.py:4243
 msgid "total"
 msgstr "total"
 
-#: src/astrodoro/core/polar.py:129
+#: src/astrodoro/core/polar.py:146
 msgid "total error {arcmin:.1f}'"
 msgstr "erro total {arcmin:.1f}'"
 
-#: src/astrodoro/ui/design.py:325
+#: src/astrodoro/ui/design.py:414
 msgid "trailed"
 msgstr "arrastado"
 
@@ -1970,35 +2571,47 @@ msgstr "gire {amount} para leste"
 msgid "turn {amount} west"
 msgstr "gire {amount} para oeste"
 
-#: src/astrodoro/ui/main.py:722 src/astrodoro/ui/targets.py:29
+#: src/astrodoro/ui/main.py:923 src/astrodoro/ui/targets.py:29
 msgid "type"
 msgstr "tipo"
 
-#: src/astrodoro/ui/worker.py:342
-msgid "unreadable dark: {error}"
-msgstr "dark ilegível: {error}"
-
-#: src/astrodoro/ui/worker.py:393
-msgid "unreadable flat: {error}"
-msgstr "flat ilegível: {error}"
+#: src/astrodoro/core/lucky.py:480
+msgid "under-exposed at {pct:.0f}% — {factor:.1f}x would fill the range"
+msgstr "subexposto em {pct:.0f}% — {factor:.1f}x preencheria a faixa"
 
 #: src/astrodoro/ui/previews.py:115
 msgid "unreadable preview"
 msgstr "foto ilegível"
 
+#: src/astrodoro/ui/worker.py:428
+msgid "unreadable {kind}: {error}"
+msgstr "{kind} ilegível: {error}"
+
 #: src/astrodoro/pointing/pushto.py:82
 msgid "up {amount}"
 msgstr "suba {amount}"
 
-#: src/astrodoro/ui/main.py:1434
+#: src/astrodoro/ui/main.py:2289
 msgid "useful integration"
 msgstr "integração útil"
+
+#: src/astrodoro/ui/main.py:1402
+msgid "view"
+msgstr "visualização"
 
 #: src/astrodoro/ui/loupe.py:86
 msgid "waiting for stars"
 msgstr "esperando estrelas"
 
-#: src/astrodoro/ui/worker.py:259
+#: src/astrodoro/core/lucky.py:165
+msgid "waning crescent"
+msgstr "minguante"
+
+#: src/astrodoro/core/lucky.py:166
+msgid "waning gibbous"
+msgstr "gibosa minguante"
+
+#: src/astrodoro/ui/worker.py:325
 msgid "warm-up cut off at the 3 minute limit"
 msgstr "reaquecimento interrompido no limite de 3 min"
 
@@ -2006,7 +2619,7 @@ msgstr "reaquecimento interrompido no limite de 3 min"
 msgid "warmed up to {current:+.1f} C, cooler off"
 msgstr "reaquecido a {current:+.1f} °C, TEC desligado"
 
-#: src/astrodoro/ui/main.py:3025
+#: src/astrodoro/ui/main.py:4317
 msgid "warming up"
 msgstr "reaquecendo"
 
@@ -2014,77 +2627,137 @@ msgstr "reaquecendo"
 msgid "warming up: {current:+.1f} -> {goal:+.1f} C before switching off"
 msgstr "reaquecendo: {current:+.1f} → {goal:+.1f} °C antes de desligar"
 
-#: src/astrodoro/ui/main.py:1612
+#: src/astrodoro/ui/main.py:2463
 msgid "warning: bin{bin} clips the highlights; bin2 is the only lossless one on this camera"
 msgstr "aviso: bin{bin} grampeia as altas luzes; bin2 é o único sem perda nesta câmera"
 
-#: src/astrodoro/ui/worker.py:590
+#: src/astrodoro/ui/worker.py:754
 msgid "warning: dark flat, it carries noise into the data — add light or lengthen the exposure"
 msgstr "aviso: flat escuro, leva ruído para os dados — ilumine mais ou alongue a exposição"
 
-#: src/astrodoro/ui/worker.py:364
-msgid "warning: dark taken at {dark:+.1f} C, sensor now at {now:+.1f} C ({delta:+.1f} C apart)"
-msgstr "atenção: dark tirado a {dark:+.1f} °C, sensor agora a {now:+.1f} °C ({delta:+.1f} °C de diferença)"
-
-#: src/astrodoro/ui/worker.py:587
+#: src/astrodoro/ui/worker.py:751
 msgid "warning: flat close to saturation — shorten the exposure"
 msgstr "aviso: flat perto da saturação — encurte a exposição"
 
-#: src/astrodoro/ui/design.py:336
+#: src/astrodoro/ui/worker.py:443
+msgid "warning: {detail}"
+msgstr "aviso: {detail}"
+
+#: src/astrodoro/core/lucky.py:165
+msgid "waxing crescent"
+msgstr "crescente"
+
+#: src/astrodoro/core/lucky.py:166
+msgid "waxing gibbous"
+msgstr "gibosa crescente"
+
+#: src/astrodoro/ui/design.py:425
 msgid "weight"
 msgstr "peso"
 
-#: src/astrodoro/ui/main.py:124
+#: src/astrodoro/ui/main.py:133
 msgid "what is worth imaging at this hour, ranked — altitude, Moon, size"
 msgstr "o que vale fotografar neste horário, por relevância — altitude, Lua, tamanho"
 
-#: src/astrodoro/ui/main.py:1334
+#: src/astrodoro/ui/main.py:2189
 msgid "what it looks like"
 msgstr "como ele é"
 
-#: src/astrodoro/ui/main.py:731
+#: src/astrodoro/ui/main.py:1608
+msgid "what to do now"
+msgstr "o que fazer agora"
+
+#: src/astrodoro/ui/main.py:932
 msgid "what your horizon actually clears — trees, the neighbour's wall, the worst of the light dome"
 msgstr "o que o seu horizonte realmente livra — árvores, o muro do vizinho, o pior da poluição luminosa"
 
-#: src/astrodoro/ui/main.py:1076
+#: src/astrodoro/ui/main.py:1938
+msgid "where master bias frames are written"
+msgstr "onde os bias mestres são gravados"
+
+#: src/astrodoro/ui/main.py:1939
 msgid "where master darks are written"
 msgstr "onde os master darks são gravados"
 
-#: src/astrodoro/ui/main.py:1077
+#: src/astrodoro/ui/main.py:1940
 msgid "where master flats are written"
 msgstr "onde os master flats são gravados"
 
-#: src/astrodoro/ui/main.py:983
+#: src/astrodoro/ui/main.py:1755
+msgid "where the tube points"
+msgstr "para onde o tubo aponta"
+
+#: src/astrodoro/ui/main.py:1419
+msgid "white point"
+msgstr "ponto branco"
+
+#: src/astrodoro/ui/main.py:1229
 msgid "whites"
 msgstr "brancos"
 
-#: src/astrodoro/ui/main.py:1421
+#: src/astrodoro/ui/main.py:2921
+msgid "whole frame"
+msgstr "quadro inteiro"
+
+#: src/astrodoro/ui/main.py:2276
 msgid "why frames are being dropped — what tells you whether to change strictness, refocus or wait out the cloud"
 msgstr "por que os frames estão saindo — o que dizer se vale mexer no rigor, refocar ou esperar a nuvem"
 
-#: src/astrodoro/ui/main.py:1370
+#: src/astrodoro/ui/main.py:2225
 msgid "why it scored that"
 msgstr "por que essa nota"
 
-#: src/astrodoro/ui/main.py:875
+#: src/astrodoro/ui/main.py:1534
+msgid "window"
+msgstr "janela"
+
+#: src/astrodoro/ui/main.py:1085
 msgid "writes 1 in every N subs"
 msgstr "grava 1 de cada N subs"
 
-#: src/astrodoro/ui/main.py:1221
+#: src/astrodoro/ui/main.py:2069
 msgid "zoom in"
 msgstr "aproximar"
 
-#: src/astrodoro/ui/main.py:1220
+#: src/astrodoro/ui/main.py:2068
 msgid "zoom out"
 msgstr "afastar"
 
-#: src/astrodoro/core/tonight.py:160 src/astrodoro/ui/main.py:2715
+#: src/astrodoro/ui/main.py:2731
+msgid "{alt:+.0f}° · {compass}"
+msgstr "{alt:+.0f}° · {compass}"
+
+#: src/astrodoro/core/lucky.py:189
+msgid "{alt:.0f}° up, az {az:.0f}°"
+msgstr "{alt:.0f}° de altura, az {az:.0f}°"
+
+#: src/astrodoro/core/tonight.py:167 src/astrodoro/ui/main.py:3939
 msgid "{alt:.0f}° up, {dir}"
 msgstr "{alt:.0f}° acima, {dir}"
+
+#: src/astrodoro/core/lucky.py:192
+msgid "{arcmin:.1f}'"
+msgstr "{arcmin:.1f}'"
 
 #: src/astrodoro/pointing/pushto.py:90
 msgid "{arcmin:.1f}' from the target"
 msgstr "{arcmin:.1f}' do alvo"
+
+#: src/astrodoro/core/lucky.py:194 src/astrodoro/ui/main.py:2734
+msgid "{arcsec:.1f}\""
+msgstr "{arcsec:.1f}\""
+
+#: src/astrodoro/ui/main.py:2761
+msgid "{body} is {alt:.0f}° below the horizon"
+msgstr "{body} está {alt:.0f}° abaixo do horizonte"
+
+#: src/astrodoro/ui/main.py:2789
+msgid "{body} wants {factor:.0f}x more light than {exp:.3f}s gives; past that the exposure stops freezing the seeing, so raise the gain instead"
+msgstr "{body} pede {factor:.0f}x mais luz do que {exp:.3f}s dá; além disso a exposição deixa de congelar o seeing, então aumente o ganho"
+
+#: src/astrodoro/ui/main.py:2784
+msgid "{body}: {exp:.4f}s, gain {gain}, bin{bin} — now adjust the exposure by the histogram"
+msgstr "{body}: {exp:.4f}s, ganho {gain}, bin{bin} — agora ajuste a exposição pelo histograma"
 
 #: src/astrodoro/drivers/svbony/camera.py:309
 msgid "{control} is not writable on this camera"
@@ -2094,11 +2767,11 @@ msgstr "{control} não é gravável nesta câmera"
 msgid "{control}={value} is outside the range [{low}, {high}]"
 msgstr "{control}={value} fora da faixa [{low}, {high}]"
 
-#: src/astrodoro/core/tonight.py:177
+#: src/astrodoro/core/tonight.py:184
 msgid "{deg:.0f}° from the Moon"
 msgstr "{deg:.0f}° da Lua"
 
-#: src/astrodoro/ui/main.py:2077
+#: src/astrodoro/ui/main.py:3283
 msgid "{deg:.0f}° from the target"
 msgstr "{deg:.0f}° do alvo"
 
@@ -2106,67 +2779,143 @@ msgstr "{deg:.0f}° do alvo"
 msgid "{first}; voting: {second}"
 msgstr "{first}; votação: {second}"
 
-#: src/astrodoro/ui/main.py:2217 src/astrodoro/ui/main.py:2976 src/astrodoro/ui/targets.py:140
+#: src/astrodoro/core/masters.py:136
+msgid "{kind} at gain {have} against lights at gain {want}"
+msgstr "{kind} com ganho {have} contra lights com ganho {want}"
+
+#: src/astrodoro/core/masters.py:142
+msgid "{kind} at offset {have} against lights at offset {want} — the pedestal it removes is the wrong one"
+msgstr "{kind} com offset {have} contra lights com offset {want} — o pedestal que ele remove é o errado"
+
+#: src/astrodoro/ui/worker.py:586
+msgid "{kind} cancelled"
+msgstr "{kind} cancelado"
+
+#: src/astrodoro/ui/worker.py:434
+msgid "{kind} ignored: {got} != {want} (different bin?)"
+msgstr "{kind} ignorado: {got} != {want} (bin diferente?)"
+
+#: src/astrodoro/ui/worker.py:599
+msgid "{kind} interrupted: {error}"
+msgstr "{kind} interrompido: {error}"
+
+#: src/astrodoro/ui/main.py:1121 src/astrodoro/ui/main.py:1139 src/astrodoro/ui/main.py:1162 src/astrodoro/ui/main.py:2608
+msgid "{kind}: none"
+msgstr "{kind}: nenhum"
+
+#: src/astrodoro/ui/main.py:2616
+msgid "{kind}: {name}"
+msgstr "{kind}: {name}"
+
+#: src/astrodoro/ui/main.py:2612
+msgid "{kind}: {name} (checked at Start)"
+msgstr "{kind}: {name} (verificado no Start)"
+
+#: src/astrodoro/ui/main.py:3439 src/astrodoro/ui/main.py:4251 src/astrodoro/ui/targets.py:140
 msgid "{min:.0f} min"
 msgstr "{min:.0f} min"
 
-#: src/astrodoro/ui/worker.py:739
+#: src/astrodoro/ui/worker.py:978
 msgid "{mode}: integration on hold, stack preserved"
 msgstr "{mode}: integração em espera, stack preservado"
 
-#: src/astrodoro/ui/main.py:1688
+#: src/astrodoro/ui/main.py:1847
+msgid "{name}  {rate:+.4f}°/min  r² {r2:.2f}  {span:.0f}s"
+msgstr "{name}  {rate:+.4f}°/min  r² {r2:.2f}  {span:.0f}s"
+
+#: src/astrodoro/ui/main.py:2538
 msgid "{name} -> {path}"
 msgstr "{name} -> {path}"
 
-#: src/astrodoro/ui/design.py:437
+#: src/astrodoro/ui/main.py:1843
+msgid "{name} · RA {ra:.3f}° Dec {dec:+.3f}°"
+msgstr "{name} · RA {ra:.3f}° Dec {dec:+.3f}°"
+
+#: src/astrodoro/ui/design.py:526
 msgid "{n} back"
 msgstr "{n} atrás"
 
-#: src/astrodoro/ui/main.py:1666
+#: src/astrodoro/ui/main.py:2516
 msgid "{n} camera(s): {names}"
 msgstr "{n} câmera(s): {names}"
 
-#: src/astrodoro/ui/main.py:2864
+#: src/astrodoro/ui/main.py:1925
+msgid "{n} fields · geometry {cond:.1f} · {parity}"
+msgstr "{n} campos · geometria {cond:.1f} · {parity}"
+
+#: src/astrodoro/ui/main.py:4100
 msgid "{n} frames rejected in a row — cloud, dew or the target left the frame"
 msgstr "{n} frames rejeitados em sequência — nuvem, orvalho ou o alvo saiu do quadro"
 
-#: src/astrodoro/ui/main.py:3209
+#: src/astrodoro/ui/main.py:2938
+msgid "{n} frames · {seconds:.0f}s · {folder}"
+msgstr "{n} quadros · {seconds:.0f}s · {folder}"
+
+#: src/astrodoro/ui/main.py:1826
+msgid "{n} frames · {span:.0f}s"
+msgstr "{n} frames · {span:.0f}s"
+
+#: src/astrodoro/ui/main.py:4506
 msgid "{n} frames · {time} of integration"
 msgstr "{n} frames · {time} de integração"
 
-#: src/astrodoro/ui/design.py:443 src/astrodoro/ui/main.py:3150
+#: src/astrodoro/ui/design.py:532 src/astrodoro/ui/main.py:4446
 msgid "{n} stars"
 msgstr "{n} estrelas"
 
-#: src/astrodoro/core/recorder.py:205
+#: src/astrodoro/core/recorder.py:212
 msgid "{n} subs, {mb:.0f} MB, {free:.1f} GB free"
 msgstr "{n} subs, {mb:.0f} MB, {free:.1f} GB livres"
 
-#: src/astrodoro/core/recorder.py:208
+#: src/astrodoro/core/recorder.py:215
 msgid "{n} subs, {mb:.0f} MB, {rate:.0f} MB/min, {free:.1f} GB free (~{hours:.1f} h)"
 msgstr "{n} subs, {mb:.0f} MB, {rate:.0f} MB/min, {free:.1f} GB livres (~{hours:.1f} h)"
 
-#: src/astrodoro/ui/main.py:3162
+#: src/astrodoro/ui/main.py:4458
 msgid "{n} suggestions for {when}"
 msgstr "{n} sugestões para {when}"
 
-#: src/astrodoro/core/catalog.py:93
+#: src/astrodoro/core/catalog.py:95
 msgid "{path} not found — run `astrodoro catalog`"
 msgstr "{path} não encontrado — rode `astrodoro catalog`"
 
-#: src/astrodoro/core/focus.py:106
+#: src/astrodoro/core/focus.py:111
 msgid "{percent:.0f}% above the best{arrow}"
 msgstr "{percent:.0f}% acima do melhor{arrow}"
 
-#: src/astrodoro/ui/main.py:2229
+#: src/astrodoro/core/focus.py:261
+msgid "{percent:.0f}% below the sharpest{arrow}"
+msgstr "{percent:.0f}% abaixo do mais nítido{arrow}"
+
+#: src/astrodoro/ui/main.py:2729
+msgid "{phase}, {pct:.0f}%"
+msgstr "{phase}, {pct:.0f}%"
+
+#: src/astrodoro/core/lucky.py:195
+msgid "{phase}, {pct:.0f}% lit · {size} · {where}"
+msgstr "{phase}, {pct:.0f}% iluminado · {size} · {where}"
+
+#: src/astrodoro/ui/main.py:2747
+msgid "{px:.0f} px across at {scale:.2f}\"/px — a barlow is what buys detail here, not exposure"
+msgstr "{px:.0f} px de diâmetro a {scale:.2f}\"/px — aqui quem compra detalhe é uma barlow, não a exposição"
+
+#: src/astrodoro/ui/main.py:4172
+msgid "{px:.0f}px"
+msgstr "{px:.0f}px"
+
+#: src/astrodoro/ui/main.py:2920
+msgid "{px} px"
+msgstr "{px} px"
+
+#: src/astrodoro/ui/main.py:3451
 msgid "{sb:.1f} mag/arcsec²"
 msgstr "{sb:.1f} mag/arcsec²"
 
-#: src/astrodoro/ui/main.py:1629
+#: src/astrodoro/ui/main.py:2479
 msgid "{scale:.3f}\"/px · field {w:.0f}' x {h:.0f}'"
 msgstr "{scale:.3f}\"/px · campo {w:.0f}' x {h:.0f}'"
 
-#: src/astrodoro/ui/main.py:2073
+#: src/astrodoro/ui/main.py:3279
 msgid "{star} · mag {mag:.1f}\n{alt:.0f}° up, {dir}"
 msgstr "{star} · mag {mag:.1f}\n{alt:.0f}° acima, {dir}"
 
@@ -2174,11 +2923,10 @@ msgstr "{star} · mag {mag:.1f}\n{alt:.0f}° acima, {dir}"
 msgid "{text} — worth {weight:.2f} of tonight{extra}"
 msgstr "{text} — vale {weight:.2f} da noite{extra}"
 
-#: src/astrodoro/core/equatorial.py:167
+#: src/astrodoro/core/equatorial.py:177
 msgid "~{min:.0f} min of useful integration before the corner smears"
 msgstr "integração útil ~{min:.0f} min antes de arrastar o canto"
 
-#: src/astrodoro/ui/main.py:700
+#: src/astrodoro/ui/main.py:901
 msgid "−1h"
 msgstr "−1h"
-

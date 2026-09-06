@@ -4,6 +4,11 @@ On a Dobsonian, focus is manual: your hand is on the focuser and your eye
 rarely on the screen. So this module delivers three things — a large, stable
 number, the recent trend (you need to know whether it is improving, not just
 the absolute value), and audio feedback.
+
+Two meters, because two kinds of target: HFR on stars, and gradient contrast on
+a surface, where there is no star to measure. Both answer the same question in
+the same shape — how far from the best this session has managed — so the
+interface reads either without knowing which one it got.
 """
 from __future__ import annotations
 
@@ -139,3 +144,122 @@ def brightest_usable(stars: StarField, saturation: float | None = None):
         if ok[i]:
             return tuple(stars.xy[i])
     return tuple(stars.xy[idx[0]])
+
+
+# ------------------------------------------------------- focusing on a surface
+#: Arbitrary scale on `sharpness`, so the readout is a two-digit number instead
+#: of a string of zeros. Only comparable within one session, like the value it
+#: multiplies.
+SHARPNESS_SCALE = 1000.0
+
+
+def sharpness(lum: np.ndarray) -> float:
+    """Contrast of an extended object — what replaces HFR when there are no stars.
+
+    On the Moon nothing in the frame is a point source, so every star-based
+    measurement returns nothing. What is left is the contrast of the terminator
+    and the crater rims: the mean squared gradient, divided by the mean squared
+    level so that turning up the gain does not read as better focus. Higher is
+    better, the opposite of HFR.
+
+    It is comparable only against itself, within one session and one framing:
+    the normalisation removes exposure, not how much of the frame is dark sky.
+    """
+    a = np.asarray(lum, dtype=np.float32)
+    if a.ndim != 2 or a.shape[0] < 2 or a.shape[1] < 2:
+        return 0.0
+    m = float(a.mean())
+    if m <= 0.0:
+        return 0.0
+    gy = np.diff(a, axis=0)
+    gx = np.diff(a, axis=1)
+    energy = float(np.mean(gy * gy) + np.mean(gx * gx))
+    return SHARPNESS_SCALE * energy / (m * m)
+
+
+@dataclass
+class SharpnessSample:
+    t: float
+    value: float
+    temperature: float | None = None
+
+
+class SharpnessMeter:
+    """Sharpness history with a trend and a session best.
+
+    Deliberately not `FocusMeter` with a sign flag: there the best is the
+    smallest number and here it is the largest, and every comparison in the
+    class is one of those two. Folding them together made each call site read
+    backwards.
+    """
+
+    def __init__(self, window: int = 400, trend_seconds: float = 20.0):
+        self.samples: deque[SharpnessSample] = deque(maxlen=window)
+        self.trend_seconds = trend_seconds
+        self.best: SharpnessSample | None = None
+
+    def add(self, value: float,
+            temperature: float | None = None) -> SharpnessSample:
+        s = SharpnessSample(t=time.time(), value=float(value),
+                            temperature=temperature)
+        self.samples.append(s)
+        if np.isfinite(s.value) and (self.best is None
+                                     or s.value > self.best.value):
+            self.best = s
+        return s
+
+    def series(self) -> tuple[np.ndarray, np.ndarray]:
+        if not self.samples:
+            return np.empty(0), np.empty(0)
+        t0 = self.samples[-1].t
+        t = np.array([s.t - t0 for s in self.samples])
+        v = np.array([s.value for s in self.samples])
+        return t, v
+
+    def trend(self) -> float:
+        """Slope over the last `trend_seconds`, per minute. Positive improves."""
+        t, v = self.series()
+        m = np.isfinite(v) & (t > -self.trend_seconds)
+        if m.sum() < 4:
+            return float("nan")
+        t, v = t[m], v[m]
+        if np.ptp(t) < 1.0:      # ndarray.ptp() was removed in numpy 2.0
+            return float("nan")
+        return float(np.polyfit(t, v, 1)[0] * 60.0)
+
+    @property
+    def current(self) -> SharpnessSample | None:
+        return self.samples[-1] if self.samples else None
+
+    def ratio_to_best(self) -> float:
+        """Best over current — 1.0 at the session best, larger is worse.
+
+        Inverted relative to the value it measures so that it means the same
+        thing as `FocusMeter.ratio_to_best`: the colour thresholds, the loupe
+        and the focus beep all read this one number and must not have to know
+        which meter produced it.
+        """
+        c = self.current
+        if (c is None or self.best is None or not np.isfinite(c.value)
+                or c.value <= 0):
+            return float("nan")
+        return self.best.value / c.value
+
+    def verdict(self) -> str:
+        r = self.ratio_to_best()
+        tr = self.trend()
+        if not np.isfinite(r):
+            return _("no contrast in the frame")
+        if r < 1.03:
+            return _("at the session's sharpest")
+        arrow = ""
+        if np.isfinite(tr):
+            if tr > 0.05:
+                arrow = _(" (improving)")
+            elif tr < -0.05:
+                arrow = _(" (getting worse)")
+        return _("{percent:.0f}% below the sharpest{arrow}").format(
+            percent=(1 - 1 / r) * 100, arrow=arrow)
+
+    def reset_best(self) -> None:
+        self.best = None
