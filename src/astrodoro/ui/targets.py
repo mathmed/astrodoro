@@ -134,8 +134,14 @@ def _score_colour(score: float, pal) -> str:
 
 def _cells(s: Suggestion) -> list[str]:
     o = s.obj
-    size = (f"{o.major_arcmin:.0f}'" if np.isfinite(o.major_arcmin)
-            and o.major_arcmin > 0 else "—")
+    # Arcseconds below the arcminute: a planet rounds to 0' in the column that
+    # is there to say how big it is. Jupiter is 45", Neptune 2".
+    if not (np.isfinite(o.major_arcmin) and o.major_arcmin > 0):
+        size = "—"
+    elif o.major_arcmin < 1.0:
+        size = f'{o.major_arcmin * 60:.0f}"'
+    else:
+        size = f"{o.major_arcmin:.0f}'"
     left = (_("all night") if np.isinf(s.minutes_left)
             else _("{min:.0f} min").format(min=s.minutes_left))
     moon = "—" if not np.isfinite(s.moon_sep) else f"{s.moon_sep:.0f}°"

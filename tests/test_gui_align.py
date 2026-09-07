@@ -38,7 +38,7 @@ def _status(ready=True, n=40, span=420.0, rate=0.0031, middle=1.7e9):
 def test_alignment_is_not_a_mode(window):
     from astrodoro.ui.main import MODES
 
-    assert [m[0] for m in MODES] == ["frame", "targets", "stack", "lucky"]
+    assert [m[0] for m in MODES] == ["frame", "stack", "lucky", "targets"]
     assert window.align_window.isAncestorOf(window.btn_align_measure)
 
 

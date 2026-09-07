@@ -114,7 +114,8 @@ The rest of `core/` hangs off that spine: `stacker.py` (acceptance and the
 accumulator), `background.py` and `stretch.py` (display only), `focus.py` (HFR
 and, for a surface target, gradient contrast; loupe), `equatorial.py` (residual
 platform rotation), `polar.py`, `cooling.py`, `catalog.py`, `tonight.py` (the
-target ranking), `previews.py` (DSS cutouts, disk cache first — in the field
+target ranking, the Moon and the planets included — `_rank_bodies` says what
+three of the six factors mean for a body), `previews.py` (DSS cutouts, disk cache first — in the field
 there is no network).
 
 `core/platform_align.py` is the alignment procedure: it turns the residual
@@ -130,7 +131,8 @@ every assumption the pipeline holds — milliseconds instead of seconds,
 saturation instead of noise, no stars to register on — so the lucky path in
 `ui/worker.py` branches before star detection and never reaches the stacker.
 What it produces instead is an ephemeris of the bodies no catalogue carries
-(`lucky.body_at`), an exposure guard (`lucky.levels`), a contrast focus metric
+(`lucky.body_at`, and `lucky.bodies_at` for the eight the TARGETS ranking
+scores), an exposure guard (`lucky.levels`), a contrast focus metric
 (`focus.SharpnessMeter`) and a `recorder.Burst`: a bounded run of frames written
 straight to disk.
 
@@ -164,9 +166,9 @@ self-signed exception is per host *and* port), `model.py` joins samples +
 `orientation.py` maths + `brightstars.py`, `pushto.py` turns that into an arrow.
 
 `ui/main.py` is one window organised by **task mode**, not by settings category
-— `MODES` = frame / targets / integrate / lucky ("PLANETS"), in the order of a
-night — with a vitals bar that never leaves the screen and, above it, a top
-bar for what is not a phase: the night-mode / image-only / log toggles and the configuration, which
+— `MODES` = frame / integrate / lucky ("PLANETS") / targets — with a vitals
+bar that never leaves the screen and, above it, a top bar for what is not a
+phase: the night-mode / image-only / log toggles and the configuration, which
 opens in its own window (`_build_config_window`) and moves neither the mode nor
 the view. `ui/design.py` owns tokens, typography and shared widgets; new UI
 composes from there.

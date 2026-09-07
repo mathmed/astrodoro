@@ -376,6 +376,44 @@ What each factor is measuring, and why it is not something simpler:
   looking at; whether anyone ever gave the object a name is the closest fact it
   has. Messier 1.0, named 0.92, catalogue number 0.7.
 
+### The Moon and the planets are ranked on the same six factors
+
+They are the targets no catalogue carries — a catalogue records what stands
+still — so they arrive from `core/lucky.py`'s ephemeris and are scored into the
+same list rather than beside it. A separate list would be the wrong shape for
+the question the screen answers: at nine o'clock the choice is not "which
+galaxy" but "Saturn or M8", and two lists cannot answer that.
+
+Three of the six factors carry over unchanged, and mean the same thing:
+altitude, remaining window, and surface brightness — the published mean
+magnitude of a square arcsecond of disc walks straight into the catalogue's
+formula and comes out saturated at 1.0, which is the honest answer for a body
+fifteen magnitudes above the sky it is seen against.
+
+The other three do not survive the crossing:
+
+- **moon** is 1.0. Moonlight raises the sky background, and a planet is not
+  competing with the sky background. The Moon does not shine on itself either,
+  so the separation is `NaN` rather than 0° — a number that would be true and
+  would still mean nothing.
+- **fame** is 1.0. The factor exists to separate the objects somebody drove out
+  for from the fourteen thousand that only have a number; every one of these is
+  the former.
+- **size** is not about the frame. Jupiter covers two hundredths of a percent
+  of a bin1 frame, so `_size_factor` would score every planet like a distant
+  smudge; what decides a planetary session is whether the image scale resolves
+  the disc, so the factor is `BODY_PX` over the disc in pixels — Neptune is
+  1.5 px at 1.53"/px, Mars at opposition 16, Jupiter 29, and the Moon runs off
+  the top of the curve.
+
+The cost is 55 ms of ephemeris against the 12 ms the whole catalogue takes,
+which is why `lucky.bodies_at` computes the Sun once for the eight instead of
+once per body (116 ms measured that way), why the lookahead that says which way
+a phase is going is done for the Moon alone — it is the only body whose
+`phase_name` reports it — and why the interface caches the eight by the minute
+they were asked for: the four filters recompute the list, and the sky they read
+from has not moved.
+
 ### Why the positions come from an hour angle formula and not from astropy
 
 The list is recomputed on every filter change and every hour shift, over the
@@ -840,6 +878,37 @@ star's colour — invisible on the star, visible as extra chroma noise on blank
 sky. It is now blended down to a gain of 1 (no change) below four sigma of the
 frame's own noise the same way, for the same reason: a gain measured on
 signal has nothing to correct on a pixel that has none.
+
+**The median gain assumes the field averages to neutral, and a heavily
+reddened sightline is the one place that is false.** Measured on
+`sessions/2026-09-06/1834_NGC6441/stack_193458_228f_26m35.fits`: 228 frames x
+7s = 26m35, NGC6441 at 55-59° altitude (airmass 1.16-1.22, so not atmospheric
+extinction) but at galactic b=-5° — close enough to the plane that most of the
+395 detected stars carry the same real interstellar reddening, G Scorpii (the
+naked-eye G8 giant 7' from the cluster) included. `calibrate_color` measured
+R0.669/G1.025/B1.616: sampling the linear data directly in rings around G
+Scorpii before this step gave R>G>B (a warm halo, consistent with a yellow
+giant); after it, the same rings came back B>G>R — the gain had not corrected
+a sensor error, it had inverted the scene's own colour, most visibly on the
+brightest pixels because the noise-floor blend above is *strongest* exactly
+there. `COLOR_GAIN_LIMIT = 1.25` caps the per-channel gain to what a sensor
+residual plausibly looks like — on M6 (14.8% in the red channel) the cap never
+engages; here it holds the swing to R0.8/B1.25.
+
+That cap alone still left a visible blue ring in the star's own diffuse halo,
+sampled as a patch off to one side rather than averaged around the full ring
+— the ring average washes an asymmetric patch out, which is why the first
+pass missed it. The halo measured 9.15 sigma above the background MAD,
+against 3.76 to 806 (median 53) for the star cores the gain was actually
+measured on: `calibrate_color`'s noise-floor blend was gating on any signal
+above 4 sigma, so this in-between brightness — well above sky, well below a
+real star — got the full gain as if it were one of the stars the gain
+represents, and the frame's own uniform reddening (the halo's pre-calibration
+ratio was no different from plain sky's) overshot past neutral into blue
+exactly there. Raised to `COLOR_WEIGHT_FLOOR_MAD = 20.0`, the halo's weight
+drops enough that the ratio comes back to R/G 1.01, B/G 0.98 — neutral, not
+blue — while the median star core (53 sigma) still clears the floor and keeps
+its correction.
 
 
 ## A planet is not a small Moon: everything is measured in a window

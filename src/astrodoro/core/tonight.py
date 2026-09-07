@@ -22,9 +22,15 @@ and the remaining window for free, which a per-instant transform does not.
 
 Astropy is still used for the three things that are not simple: sidereal time,
 the Sun and the Moon.
+
+The Moon and the planets are ranked into the same list, from the ephemeris
+`core/lucky.py` computes rather than from a catalogue — no catalogue can hold a
+target that moves. They are scored on the same six factors, three of which mean
+something different for a body; `_rank_bodies` says which and why.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -61,12 +67,24 @@ FULL_SESSION_MIN = 45.0
 #: labels are translated at display time, so the source strings live here.
 FAMILIES: dict[str, tuple[str, set[str] | None]] = {
     "all": (N_("everything"), None),
+    "solar": (N_("Moon and planets"), set()),
     "galaxy": (N_("galaxies"), {"G", "GPair", "GTrpl", "GGroup"}),
     "nebula": (N_("nebulae"), {"Neb", "HII", "EmN", "RfN", "Cl+N", "SNR"}),
     "planetary": (N_("planetary nebulae"), {"PN"}),
     "globular": (N_("globular clusters"), {"GCl"}),
     "open": (N_("open clusters"), {"OCl"}),
 }
+
+#: The family that holds nothing from the catalogue: the bodies come from an
+#: ephemeris, so "everything" and this one are the two that include them.
+SOLAR = "solar"
+
+#: How many pixels across a disc has to be before the image scale is doing it
+#: justice. Nothing about a planet is a framing question — Jupiter covers two
+#: hundredths of a percent of a bin1 frame — so what stands in for the size
+#: factor is whether the optics resolve it at all: Neptune is 1.5 px at
+#: 1.53"/px and no session saves that, Mars at opposition is 16, Jupiter 29.
+BODY_PX = ([0.0, 4.0, 15.0, 60.0], [0.10, 0.35, 0.85, 1.00])
 
 #: What an object with no name of its own keeps. A catalogue does not record
 #: which objects are worth a night, and the closest thing to that fact in the
@@ -157,6 +175,10 @@ class Suggestion:
     #: Surface brightness in mag/arcsec², NaN for objects with no measured size.
     surface_brightness: float
     factors: dict[str, float] = field(default_factory=dict)
+    #: `lucky.BODIES` key when this row is the Moon or a planet, "" otherwise.
+    #: The interface routes on it: a body is pointed at through its ephemeris,
+    #: which keeps following it, and has no survey picture to preview.
+    body: str = ""
 
     @property
     def rising(self) -> bool:
@@ -243,12 +265,32 @@ def rank(objs: list[Obj], sky: Sky, latitude: float,
          fov_arcmin: tuple[float, float] = (55.0, 37.0),
          min_alt: float = 25.0, max_mag: float = 12.0,
          family: str = "all", fits_only: bool = False,
-         limit: int = 60) -> list[Suggestion]:
+         limit: int = 60, bodies: Sequence = (),
+         arcsec_per_px: float = 0.0) -> list[Suggestion]:
     """Score and order `objs` for the given instant, best first.
 
-    Everything is vectorised over the whole catalogue: the interface recomputes
-    this on every filter change and on every drag of the hour, and one pass over
-    14 thousand rows in numpy is a few milliseconds.
+    `bodies` are `lucky.BodyState`s, ranked against the catalogue on the same
+    six factors and sorted into the same list. They arrive already computed
+    because they cost an ephemeris call each and this is called on every filter
+    change, while the sky they are read from moves once a minute.
+    """
+    out = ([] if family == SOLAR
+           else _rank_catalogue(objs, sky, latitude, fov_arcmin, min_alt,
+                                max_mag, family, fits_only, limit))
+    if family in ("all", SOLAR):
+        out += _rank_bodies(bodies, sky, latitude, fov_arcmin, min_alt,
+                            max_mag, fits_only, arcsec_per_px)
+    out.sort(key=lambda s: -s.score)
+    return out[:limit]
+
+
+def _rank_catalogue(objs: list[Obj], sky: Sky, latitude: float,
+                    fov_arcmin: tuple[float, float], min_alt: float,
+                    max_mag: float, family: str, fits_only: bool,
+                    limit: int) -> list[Suggestion]:
+    """Everything is vectorised over the whole catalogue: the interface
+    recomputes this on every filter change and on every drag of the hour, and
+    one pass over 14 thousand rows in numpy is a few milliseconds.
     """
     if not objs:
         return []
@@ -341,6 +383,65 @@ def rank(objs: list[Obj], sky: Sky, latitude: float,
         ))
         if len(out) >= limit:
             break
+    return out
+
+
+def _rank_bodies(bodies: Sequence, sky: Sky, latitude: float,
+                 fov_arcmin: tuple[float, float], min_alt: float,
+                 max_mag: float, fits_only: bool,
+                 arcsec_per_px: float) -> list[Suggestion]:
+    """The Moon and the planets, on the same six factors as the catalogue.
+
+    Three of the six are the same measurement and mean the same thing: how high
+    it is, how long it stays, and how bright a square arcsecond of it is — the
+    published surface magnitude walks straight into the catalogue's formula and
+    comes out saturated, which is the honest answer for a body that is fifteen
+    magnitudes above the sky.
+
+    The other three do not survive the crossing. Moonlight does not touch a
+    body of this brightness, and the Moon does not shine on itself; every one
+    of them is a target somebody drove out for, so there is no anonymity to
+    discount; and size is not about the frame — it is `BODY_PX`, whether the
+    image scale resolves the disc at all.
+    """
+    out: list[Suggestion] = []
+    for st in bodies:
+        if st.alt < min_alt or not np.isfinite(st.info.mag):
+            continue
+        if st.info.mag > max_mag:
+            continue
+        _alt, _az, ha = horizon(np.array([st.ra]), np.array([st.dec]),
+                                latitude, sky.lst_deg)
+        left = _minutes_left(np.array([st.dec]), latitude, ha, min_alt)
+        airmass = 1.0 / max(np.sin(np.radians(st.alt)), 0.05)
+        f_alt = 10 ** (-0.4 * EXTINCTION_MAG * (airmass - 1.0))
+        if st.alt > ZENITH_DEG:
+            f_alt *= 0.7
+        f_window = float(np.clip(left[0] / FULL_SESSION_MIN, 0.0, 1.0))
+        px = (st.extent_arcmin * 60.0 / arcsec_per_px
+              if arcsec_per_px > 0 else float("inf"))
+        f_size = (1.0 if not np.isfinite(px)
+                  else float(np.interp(px, *BODY_PX)))
+        sb = st.info.surface_mag
+        f_bright = float(np.clip((24.5 - sb) / 4.5, 0.05, 1.0))
+        frac = st.frame_fraction(fov_arcmin)
+        score = 100.0 * f_alt * f_window * f_size * f_bright
+        if fits_only and frac > 1.0:
+            continue
+        if score <= 0:
+            continue
+        out.append(Suggestion(
+            obj=st.as_target(), score=score, alt=st.alt, az=st.az,
+            minutes_to_transit=float(-ha[0] / SIDEREAL_DEG_PER_HOUR * 60.0),
+            minutes_left=float(left[0]),
+            # Not 0° for the Moon on itself, and not a warning for a planet:
+            # the number would be true and the factor it stands for is 1.
+            moon_sep=np.nan,
+            field_fraction=frac, surface_brightness=sb,
+            factors={"altitude": float(f_alt), "window": f_window,
+                     "moon": 1.0, "size": f_size, "brightness": f_bright,
+                     "fame": 1.0},
+            body=st.body))
     return out
 
 

@@ -10,12 +10,15 @@ fresh checkout.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import numpy as np
 import pytest
 from PySide6.QtCore import QPointF
 from PySide6.QtGui import QPixmap
 
 from astrodoro.core.catalog import Catalog, Obj
+from astrodoro.core.lucky import BodyState
 
 
 def _obj(name, kind="G", ra=0.0, dec=-6.7, major=12.0, minor=8.0, mag=8.0,
@@ -116,8 +119,11 @@ def test_the_filters_narrow_the_list(window):
     w.sp_min_alt.setValue(80.0)
     assert w.targets.rowCount() <= everything
 
+    # A magnitude limit this tight leaves nothing in the catalogue — but the
+    # planets are brighter than any of it, and the family is what excludes them.
     w.sp_min_alt.setValue(25.0)
     w.sp_max_mag.setValue(3.0)
+    w.cb_family.setCurrentIndex(w.cb_family.findData("galaxy"))
     assert w.targets.rowCount() == 0
     assert w.targets.current() is None and not w.btn_use.isEnabled()
 
@@ -126,9 +132,47 @@ def test_an_empty_list_says_so_instead_of_going_blank(window):
     w = window
     w._catalog = Catalog(w.settings.catalog_path())     # no objects at all
     w.rail.select("targets")
+    # Whatever is up right now, the family that holds no bodies leaves nothing.
+    w.cb_family.setCurrentIndex(w.cb_family.findData("galaxy"))
     assert w.targets.rowCount() == 0
     assert not w.btn_use.isEnabled()
     assert w.lbl_sug.text()
+
+
+def _planet(lst_deg, dec, key="jupiter", diameter_arcmin=0.75) -> BodyState:
+    """A body on the meridian, so the window factor does not zero its score."""
+    return BodyState(body=key, when=datetime.now(UTC), alt=80.0 - abs(dec),
+                     az=0.0, ra=lst_deg, dec=dec, illum=1.0, waxing=False,
+                     diameter_arcmin=diameter_arcmin, distance_km=6e8)
+
+
+def test_a_planet_is_in_the_list_and_is_pointed_at_by_its_ephemeris(
+        window, monkeypatch):
+    """The Moon and the planets rank with the catalogue, and choosing one goes
+    through the body path: their coordinates are only true for the minute they
+    were computed in."""
+    from astrodoro.ui import main as ui_main
+
+    w = window
+    w.rail.select("targets")               # a first pass, for the sidereal time
+    lst = w._sky.lst_deg
+    monkeypatch.setattr(ui_main.lucky, "bodies_at",
+                        lambda *a, **k: [_planet(lst, w.sp_lat.value())])
+    w._bodies_key = None
+    w._refresh_targets()
+
+    row = next((s for s in w.targets._rows if s.body == "jupiter"), None)
+    assert row is not None, "the planet did not reach the list"
+    assert row.obj.kind == "Planet"
+
+    w.targets.selectRow(w.targets._rows.index(row))
+    # No survey picture of something that moves: the panel says so.
+    assert w.preview._pix is None and w.preview._note
+
+    w._use_suggestion(row)
+    assert w.cb_body.currentData() == "jupiter"
+    assert w._body_target, "pointing at it did not start following it"
+    assert w._mode == "frame"
 
 
 def test_the_loupe_opens_over_the_image_and_pins_a_star(window):

@@ -227,36 +227,74 @@ def body_at(body: str, latitude: float, longitude: float,
     does not find it. The planets do not care, and are computed the same way for
     one code path instead of two.
     """
-    from astropy import units as u
-    from astropy.coordinates import AltAz, EarthLocation, get_body
+    from astropy.coordinates import get_body
     from astropy.time import Time
 
     if body not in BODIES:
         raise KeyError(body)
     t = Time(when) if when is not None else Time.now()
-    site = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg,
+    site = _site(latitude, longitude, elevation_m)
+    stamp = t.to_datetime() if when is None else when
+    return _state(body, t, site, get_body("sun", t, location=site), stamp,
+                  lookahead=True)
+
+
+def bodies_at(latitude: float, longitude: float,
+              when: datetime | None = None,
+              elevation_m: float = 0.0) -> list[BodyState]:
+    """Every body at one instant, in `BODIES` order.
+
+    `body_at` in a loop asks for the Sun once per body and again six hours on:
+    32 ephemeris calls for the eight, 116 ms measured, against 55 ms here. The
+    Sun is computed once for the instant, and the lookahead that says which way
+    a phase is going is done for the Moon alone — it is the only body whose
+    `phase_name` reports the direction.
+    """
+    from astropy.coordinates import get_body
+    from astropy.time import Time
+
+    t = Time(when) if when is not None else Time.now()
+    site = _site(latitude, longitude, elevation_m)
+    sun = get_body("sun", t, location=site)
+    stamp = t.to_datetime() if when is None else when
+    return [_state(key, t, site, sun, stamp, lookahead=(key == "moon"))
+            for key in BODIES]
+
+
+def _site(latitude: float, longitude: float, elevation_m: float):
+    from astropy import units as u
+    from astropy.coordinates import EarthLocation
+
+    return EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg,
                          height=elevation_m * u.m)
 
-    sun = get_body("sun", t, location=site)
+
+def _state(body: str, t, site, sun, when: datetime,
+           lookahead: bool) -> BodyState:
+    from astropy import units as u
+    from astropy.coordinates import AltAz, get_body
+
     obj = get_body(body, t, location=site)
     altaz = obj.transform_to(AltAz(obstime=t, location=site))
-
     illum, dist_km = _phase(sun, obj)
-    # Which way the phase is going, from the phase itself six hours on. The
-    # ecliptic-longitude rule the Moon is usually done with does not carry over:
-    # for an inner planet, leading the Sun means waning, not waxing.
-    later = t + 6 * u.hour
-    illum_later, _d = _phase(get_body("sun", later, location=site),
-                             get_body(body, later, location=site))
+
+    waxing = False
+    if lookahead:
+        # Which way the phase is going, from the phase itself six hours on. The
+        # ecliptic-longitude rule the Moon is usually done with does not carry
+        # over: for an inner planet, leading the Sun means waning, not waxing.
+        later = t + 6 * u.hour
+        illum_later, _d = _phase(get_body("sun", later, location=site),
+                                 get_body(body, later, location=site))
+        waxing = bool(illum_later > illum)
 
     radius = BODIES[body].radius_km
     diameter = float(np.degrees(2 * np.arcsin(min(radius / dist_km, 1.0))) * 60)
-
     return BodyState(
-        body=body, when=(t.to_datetime() if when is None else when),
+        body=body, when=when,
         alt=float(altaz.alt.deg), az=float(altaz.az.deg),
         ra=float(obj.ra.deg), dec=float(obj.dec.deg),
-        illum=illum, waxing=bool(illum_later > illum),
+        illum=illum, waxing=waxing,
         diameter_arcmin=diameter, distance_km=dist_km,
     )
 

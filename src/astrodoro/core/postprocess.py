@@ -236,6 +236,17 @@ def match_psf(rgb: np.ndarray, log: Logger | None = None) -> np.ndarray:
     return out
 
 
+# A sightline where most stars share real reddening breaks the median's
+# neutral-population assumption instead of averaging past it — see
+# docs/design-notes.md for the NGC6441 measurement these two limits come from.
+COLOR_GAIN_LIMIT = 1.25
+# A star's own diffuse halo sits well above the sky noise floor but well
+# below a real star core (9 vs 3.8-800 sigma there), so a low floor applies
+# the full gain to it as if it were a star measured by calibrate_color and
+# not the field it was measured against.
+COLOR_WEIGHT_FLOOR_MAD = 20.0
+
+
 def calibrate_color(rgb: np.ndarray, aperture: int = 3, method: str = "median",
                     log: Logger | None = None) -> np.ndarray:
     """Neutralise the background AND the stars' colour, on linear data.
@@ -282,6 +293,7 @@ def calibrate_color(rgb: np.ndarray, aperture: int = 3, method: str = "median",
         gain *= float(np.mean(flux_gain)) / gain.mean()
     else:
         gain = float(flux.mean()) / np.maximum(flux, 1e-9)
+    gain = np.clip(gain, 1.0 / COLOR_GAIN_LIMIT, COLOR_GAIN_LIMIT)
     if log:
         log(f"colour calibration       {keep.sum()} stars ({method}), gains "
             f"R{gain[0]:.3f} G{gain[1]:.3f} B{gain[2]:.3f}")
@@ -293,7 +305,7 @@ def calibrate_color(rgb: np.ndarray, aperture: int = 3, method: str = "median",
     # blotchy colour speckle on the faint corners where SNR is already worst.
     lum = rgb.mean(axis=2)
     mad = 1.4826 * float(np.median(np.abs(lum - np.median(lum))))
-    weight = np.clip(lum / max(4.0 * mad, 1e-9), 0.0, 1.0)[..., None]
+    weight = np.clip(lum / max(COLOR_WEIGHT_FLOOR_MAD * mad, 1e-9), 0.0, 1.0)[..., None]
     eff_gain = 1.0 + (gain.astype(np.float32) - 1.0) * weight
     return np.clip(rgb * eff_gain + med.mean(), 0.0, 1.0)
 

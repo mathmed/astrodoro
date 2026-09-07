@@ -15,6 +15,8 @@ import pytest
 
 from astrodoro.core import tonight
 from astrodoro.core.catalog import Obj
+from astrodoro.core.lucky import BodyState
+from astrodoro.i18n import gettext as _
 
 LAT = -6.7003
 LON = -36.9436
@@ -171,6 +173,72 @@ def test_surface_brightness_matches_the_catalogue_value_for_m31():
     sb = tonight._surface_brightness(np.array([3.4]), np.array([190.0]),
                                      np.array([60.0]))
     assert abs(float(sb[0]) - 22.2) < 0.2
+
+
+# --------------------------------------------------- the Moon and the planets
+def body(key="jupiter", ra=0.0, dec=LAT, diameter_arcmin=0.75) -> BodyState:
+    """A body where the sky fixture puts an object at the meridian."""
+    return BodyState(body=key, when=datetime(2026, 8, 25, 23, 0, tzinfo=UTC),
+                     alt=90.0 - abs(LAT - dec), az=0.0, ra=ra, dec=dec,
+                     illum=1.0, waxing=False,
+                     diameter_arcmin=diameter_arcmin, distance_km=6e8)
+
+
+def test_a_planet_is_ranked_into_the_same_list_as_the_catalogue():
+    s = sky(lst=0.0)
+    out = tonight.rank([obj(name="NGC0001")], s, LAT, bodies=[body()],
+                       arcsec_per_px=1.53)
+    assert {x.obj.name for x in out} == {"NGC0001", _("Jupiter")}
+    # And it says which body it is: pointing at one goes through the ephemeris,
+    # not through the fixed coordinates the row carries.
+    planet = next(x for x in out if x.body)
+    assert planet.body == "jupiter"
+    assert planet.obj.kind == "Planet"
+
+
+def test_the_solar_family_is_the_bodies_and_nothing_else():
+    s = sky(lst=0.0)
+    objs = [obj(name="NGC0001", kind="G", ra=0.0, dec=LAT)]
+    solar = tonight.rank(objs, s, LAT, bodies=[body()], arcsec_per_px=1.53,
+                         family="solar")
+    assert [x.body for x in solar] == ["jupiter"]
+    # A deep-sky family excludes them, the way it excludes every other type.
+    assert not any(x.body for x in
+                   tonight.rank(objs, s, LAT, bodies=[body()],
+                                arcsec_per_px=1.53, family="galaxy"))
+
+
+def test_moonlight_costs_a_body_nothing():
+    """A full Moon in the same field costs a galaxy most of its score and a
+    planet none of it: the planet is fifteen magnitudes above the sky it
+    raises. The Moon does not shine on itself either — hence no separation."""
+    s = sky(lst=0.0, moon_alt=60.0, moon_ra=0.0, moon_dec=LAT, moon_illum=1.0)
+    out = tonight.rank([obj(kind="G", ra=0.0, dec=LAT)], s, LAT,
+                       bodies=[body(), body("moon", diameter_arcmin=31.0)],
+                       arcsec_per_px=1.53)
+    galaxy = next(x for x in out if not x.body)
+    assert galaxy.factors["moon"] < 0.5
+    for b in (x for x in out if x.body):
+        assert b.factors["moon"] == 1.0
+        assert np.isnan(b.moon_sep)
+
+
+def test_a_disc_the_scale_cannot_resolve_loses_to_one_it_can():
+    """Neptune is 2.3" across — 1.5 px at 1.53"/px, and no session saves that.
+    Jupiter at the same altitude is 29 px, and that is the whole difference."""
+    s = sky(lst=0.0)
+    out = tonight.rank([], s, LAT, arcsec_per_px=1.53,
+                       bodies=[body("neptune", diameter_arcmin=2.3 / 60),
+                               body("jupiter", diameter_arcmin=45.0 / 60)])
+    assert [x.body for x in out] == ["jupiter", "neptune"]
+    assert out[0].factors["size"] > 3 * out[1].factors["size"]
+
+
+def test_a_body_below_the_minimum_altitude_is_not_suggested():
+    s = sky(lst=0.0)
+    assert tonight.rank([], s, LAT, min_alt=25.0,
+                        bodies=[body(dec=LAT - 70.0)],
+                        arcsec_per_px=1.53) == []
 
 
 def test_the_twilight_text_names_the_stage_of_the_night():

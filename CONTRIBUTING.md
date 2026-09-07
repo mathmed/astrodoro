@@ -126,7 +126,10 @@ mode this program has. The reasoning behind each is in
 - **A suggestion's score is auditable, factor by factor.** `tonight.rank` fills
   `Suggestion.factors` and the TARGETS panel shows every one of them, for the
   same reason a rejected frame shows its measurements. A new factor has to
-  appear there too, otherwise the score becomes an oracle.
+  appear there too, otherwise the score becomes an oracle. The Moon and the
+  planets fill the same six keys through `_rank_bodies`, where three of them
+  measure something else — moonlight, fame and the size of a disc the frame
+  never crops.
 - **PLANETS is not a view of the deep-sky pipeline, it is a branch out of it.**
   `ui/worker.py::_process` leaves before star detection, so nothing there
   reaches the stacker, the registration or the platform monitor, and
@@ -223,8 +226,8 @@ What the suite covers, and why each test exists:
 | `test_orientation.py` | a flipped sign in the alignment, which doubles the error |
 | `test_pushto.py` | the arrow pointing confidently the wrong way, and the alignment star suggested on the far side of the sky |
 | `test_gui_framing.py` | every gesture of the Frame mode actually running |
-| `test_gui_targets.py` | the suggestion list, the hour field and the loupe running |
-| `test_tonight.py` | the ranking suggesting something below the horizon, or ignoring the Moon |
+| `test_gui_targets.py` | the suggestion list, the hour field, the loupe running, and a planet pointed at through its ephemeris instead of through stale coordinates |
+| `test_tonight.py` | the ranking suggesting something below the horizon, ignoring the Moon, or scoring a planet as if it were a smudge |
 | `test_previews.py` | a thumbnail cache that re-downloads, or an offline night raising instead of shrugging |
 | `test_gui_frame_review.py` | clicking a health mark and getting that frame back |
 | `test_settings.py` | a corrupt settings file must never stop the program |

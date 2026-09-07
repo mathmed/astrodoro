@@ -29,7 +29,7 @@ def test_config_is_not_a_mode(window):
     from astrodoro.ui.main import MODES
     keys = [m[0] for m in MODES]
     assert "config" not in keys, "CONFIG is a window, not a step"
-    assert keys == ["frame", "targets", "stack", "lucky"]
+    assert keys == ["frame", "stack", "lucky", "targets"]
     assert set(window.rail.buttons) == set(keys)
     assert set(window._panel_index) == set(keys)
     assert set(window._ctx_index) == set(keys)

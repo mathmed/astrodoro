@@ -40,6 +40,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QColor,
+    QFont,
     QGuiApplication,
     QImage,
     QKeySequence,
@@ -124,19 +125,19 @@ pg.setConfigOptions(imageAxisOrder="row-major", antialias=False)
 #: How the program names itself to the desktop.
 APP_NAME = "Astrodoro"
 
-#: (key, label, tooltip, icon). The order is the order of the night.
+#: (key, label, tooltip, icon).
 MODES = [
-    ("frame", N_("1  FRAME"),
+    ("frame", N_("FRAME"),
      N_("find and centre the target — live frame, phone sensor and push-to"),
      "frame"),
-    ("targets", N_("2  TARGETS"),
-     N_("what is worth imaging at this hour, ranked — altitude, Moon, size"),
-     "list"),
-    ("stack", N_("3  INTEGRATE"),
+    ("stack", N_("INTEGRATE"),
      N_("stack, record and follow the platform"), "stack"),
-    ("lucky", N_("4  PLANETS"),
+    ("lucky", N_("PLANETS"),
      N_("the Moon and the planets: nothing to stack — exposure guard, contrast "
         "focus and burst recording"), "moon"),
+    ("targets", N_("TARGETS"),
+     N_("what is worth imaging at this hour, ranked — altitude, Moon, size"),
+     "list"),
 ]
 
 #: The configuration window's shortcut. Qt maps "Ctrl" to Command on macOS, so
@@ -223,19 +224,35 @@ class RealignArrow(pg.GraphicsObject):
     geometry mirrors SkyMap._edge_arrow (ui/skymap.py): a shape built from
     cos/sin around an angle, already proven legible in both themes.
 
+    Deliberately not trying to say "push the tube this way": on an arbitrary
+    optical train that is a sign the software cannot know without a
+    calibration step (`docs/design-notes.md`'s note on `platform_parity` is
+    the same problem, solved there by re-measuring rather than by asserting a
+    sign). What it draws instead is a fixed reticle at the frame's own centre
+    plus the target's current position — the same "walk the dot onto the
+    cross" reasoning as a reflex sight: nudge, watch which way the tip moves,
+    correct if it moved further away. That only needs the picture, not a
+    compass.
+
     Length and head size scale with the frame's own half-extent rather than a
-    fixed pixel count, since the sensor resolution changes with bin.
+    fixed pixel count, since the sensor resolution changes with bin — but kept
+    modest against that extent, so the frame underneath is still readable
+    with the arrow up.
     """
 
     def __init__(self):
         super().__init__()
         self._center = QPointF(0, 0)
         self._tip = QPointF(0, 0)
+        self._shaft = QPolygonF()
         self._head = QPolygonF()
+        self._reticle = 0.0
         self._color = QColor("#ffffff")
         self._label = ""
         self._pointing = False
         self._rect = QRectF()
+        self._font = QFont()
+        self._font.setPointSizeF(11.0)
 
     def set_info(self, cx: float, cy: float, dx: float, dy: float, *,
                  ok: bool, on_target: bool, color: str, label: str) -> None:
@@ -251,22 +268,36 @@ class RealignArrow(pg.GraphicsObject):
             ang = float(np.arctan2(dy, dx))
             tx, ty = cx + r * np.cos(ang), cy + r * np.sin(ang)
             self._tip = QPointF(tx, ty)
-            head = max(half * 0.045, 6.0)
-            self._head = QPolygonF([
-                QPointF(tx + head * np.cos(ang), ty + head * np.sin(ang)),
-                QPointF(tx + head * 0.6 * np.cos(ang + 2.5),
-                        ty + head * 0.6 * np.sin(ang + 2.5)),
-                QPointF(tx + head * 0.6 * np.cos(ang - 2.5),
-                        ty + head * 0.6 * np.sin(ang - 2.5)),
+            self._reticle = max(half * 0.012, 5.0)
+            width = max(half * 0.010, 4.0)
+            perp = ang + np.pi / 2
+            ox, oy = width * np.cos(perp), width * np.sin(perp)
+            # Capped at a fraction of r, not just of the frame: an arrow a
+            # few pixels long got a head as big as one spanning the whole
+            # frame, which pushed the shaft's far end back past the centre
+            # and out the other side — a stray sliver pointing the wrong way.
+            head = min(max(half * 0.04, 10.0), r * 0.6)
+            bx, by = tx - head * np.cos(ang), ty - head * np.sin(ang)
+            self._shaft = QPolygonF([
+                QPointF(cx + ox, cy + oy), QPointF(cx - ox, cy - oy),
+                QPointF(bx - ox, by - oy), QPointF(bx + ox, by + oy),
             ])
-            pad = head + 4
+            hw = head * 0.6
+            self._head = QPolygonF([
+                self._tip,
+                QPointF(bx + hw * np.cos(perp), by + hw * np.sin(perp)),
+                QPointF(bx - hw * np.cos(perp), by - hw * np.sin(perp)),
+            ])
+            pad = head + 40
             xs = (cx, tx)
             ys = (cy, ty)
         else:
             self._tip = self._center
+            self._shaft = QPolygonF()
             self._head = QPolygonF()
-            r = max(half * 0.02, 5.0)
-            pad = r + 4
+            self._reticle = 0.0
+            r = max(half * 0.02, 6.0)
+            pad = r + 40
             xs = (cx - r, cx + r)
             ys = (cy - r, cy + r)
         self._rect = QRectF(min(xs) - pad, min(ys) - pad,
@@ -279,18 +310,29 @@ class RealignArrow(pg.GraphicsObject):
 
     def paint(self, p: QPainter, _opt, _widget=None) -> None:
         p.setRenderHint(QPainter.Antialiasing, True)
-        p.setPen(QPen(self._color, 2))
         if self._pointing:
-            p.drawLine(self._center, self._tip)
+            p.setPen(QPen(self._color, 1.5))
             p.setBrush(self._color)
+            p.drawPolygon(self._shaft)
             p.drawPolygon(self._head)
+            # The "aim here" mark: without it the target's own position was
+            # the only thing drawn, and there was nothing on screen to walk
+            # it onto.
+            k = self._reticle
+            p.drawLine(QPointF(self._center.x() - k, self._center.y()),
+                      QPointF(self._center.x() + k, self._center.y()))
+            p.drawLine(QPointF(self._center.x(), self._center.y() - k),
+                      QPointF(self._center.x(), self._center.y() + k))
         else:
+            p.setPen(QPen(self._color, 2))
             p.setBrush(Qt.NoBrush)
-            r = max(min(self._center.x(), self._center.y()) * 0.02, 5.0)
+            r = max(min(self._center.x(), self._center.y()) * 0.02, 6.0)
             p.drawEllipse(self._center, r, r)
         if self._label:
-            p.setBrush(Qt.NoBrush)
-            p.drawText(self._tip + QPointF(10, -10), self._label)
+            p.setFont(self._font)
+            p.setPen(self._color)
+            anchor = self._tip if self._pointing else self._center
+            p.drawText(anchor + QPointF(10, -10), self._label)
 
 
 class MainWindow(QMainWindow):
@@ -377,6 +419,9 @@ class MainWindow(QMainWindow):
         self._body_t = 0.0
         self._body_track = 0.0
         self._body_target = False
+        # The eight, for the ranked list. Keyed by the instant it asked for.
+        self._bodies: list = []
+        self._bodies_key: tuple | None = None
         self._t_frame = 0.0
         self._exposure = self.settings.exposure_s
         self._last_stats: dict = {}
@@ -632,9 +677,9 @@ class MainWindow(QMainWindow):
         self.panels = QStackedWidget()
         self._panel_index = {}
         for key, build in (("frame", self._panel_frame),
-                           ("targets", self._panel_targets),
                            ("stack", self._panel_stack),
-                           ("lucky", self._panel_lucky)):
+                           ("lucky", self._panel_lucky),
+                           ("targets", self._panel_targets)):
             sa = QScrollArea()
             sa.setWidget(build())
             sa.setWidgetResizable(True)
@@ -987,7 +1032,6 @@ class MainWindow(QMainWindow):
         self.lbl_goto.setWordWrap(True)
         self.lbl_goto.setFont(T_MONO())
         c.add(self.lbl_goto)
-        c.add(_hint(_("a name you already know; the list is for the rest.")))
         v.addWidget(c)
 
         v.addStretch(1)
@@ -1063,12 +1107,31 @@ class MainWindow(QMainWindow):
         self.btn_realign.setCheckable(True)
         self._ic(self.btn_realign, "target")
         self.btn_realign.setToolTip(_(
-            "Pauses accumulation without losing the stack, and draws an arrow "
-            "over the image at the target's current position. Nudge the tube "
-            "until it disappears, then resume: a new segment starts on its "
-            "own, with relaxed thresholds and a fresh reference."))
+            "Pauses accumulation without losing the stack, and draws a "
+            "reticle over the image with the target's current position "
+            "marked — nudge the tube until the two coincide. If the platform "
+            "had to be reset all the way back, the target may be nowhere in "
+            "the frame: the phone arrow above it then gives the coarse "
+            "direction from where it points now, the on-image reticle takes "
+            "over for the last stretch once the target is back in view. "
+            "Resume starts a new segment on its own, with relaxed thresholds "
+            "and a fresh reference."))
         self.btn_realign.toggled.connect(self._realign_toggled)
         c.add(self.btn_realign)
+        self.lbl_realign_arrow = QLabel("")
+        self.lbl_realign_arrow.setFont(T_DISPLAY())
+        self.lbl_realign_arrow.setAlignment(Qt.AlignCenter)
+        self.lbl_realign_arrow.setVisible(False)
+        c.add(self.lbl_realign_arrow)
+        self.lbl_realign_dir = QLabel("")
+        self.lbl_realign_dir.setWordWrap(True)
+        self.lbl_realign_dir.setFont(T_BODY())
+        self.lbl_realign_dir.setVisible(False)
+        self.lbl_realign_dir.setToolTip(_(
+            "Coarse guidance from the phone sensor, not from the stars: the "
+            "one thing that still works when the target left the frame "
+            "entirely and there is nothing in common to register against."))
+        c.add(self.lbl_realign_dir)
         v.addWidget(c)
 
         c = Card(_("target and recording"))
@@ -1220,12 +1283,6 @@ class MainWindow(QMainWindow):
         self.sl_clip, wcl = self._slider(_("shadows"), 10, 60, 28, 10.0)
         c.add(wbg)
         c.add(wcl)
-        self.chk_linked = QCheckBox(_("linked across channels"))
-        self.chk_linked.setToolTip(_(
-            "Off: each channel separately, which neutralises the background —\n"
-            "better under light pollution. On: preserves the colour ratios."))
-        self.chk_linked.toggled.connect(lambda: self._render(True))
-        c.add(self.chk_linked)
         self.sl_white, wwh = self._slider(_("whites"), 20, 100, 100, 100.0)
         self.sl_white.valueChanged.connect(lambda: self._render(True))
         self.sl_white.setToolTip(_(
@@ -1263,9 +1320,6 @@ class MainWindow(QMainWindow):
                                    for sl in (self.sl_r, self.sl_g, self.sl_b)])
         row.addWidget(b)
         c.add_layout(row)
-        c.add(_hint(_("multiplies each channel before the stretch, like a white "
-                      "balance. Applies with the stretch linked across channels; "
-                      "unlinked, each channel is already normalised on its own")))
         return c
 
     # -------------------------------------------- panel: PLANETS
@@ -1400,9 +1454,6 @@ class MainWindow(QMainWindow):
         v.addWidget(c)
 
         c = Card(_("view"))
-        c.add(_hint(_("linear, not autostretched: there is no faint signal to "
-                      "lift here, and a stretch built for a nebula flattens the "
-                      "maria into grey")))
         self.chk_follow = QCheckBox(_("keep the body centred"))
         self.chk_follow.setChecked(self.settings.lucky_follow)
         self.chk_follow.setToolTip(_(
@@ -1492,8 +1543,6 @@ class MainWindow(QMainWindow):
             "the blue maria, iron oxide in the orange ones — and only a few "
             "percent apart, so it takes amplifying to be seen at all."))
         c.add(wsa)
-        c.add(_hint(_("display only, like everything on this panel: the frames "
-                      "the burst writes are raw")))
         self._sync_body_widgets()
         return c
 
@@ -1962,8 +2011,6 @@ class MainWindow(QMainWindow):
         b.clicked.connect(lambda: self._reveal(self.settings.path("capture_dir",
                                                                  create=True)))
         c.add(b)
-        c.add(_hint(_("changes apply to the next session; the one in progress "
-                      "keeps writing where it started")))
         return c
 
     def _card_site(self) -> Card:
@@ -2029,8 +2076,6 @@ class MainWindow(QMainWindow):
                                     "glasses, a small target is expensive"))
         self.chk_touch.toggled.connect(self._touch_changed)
         c.add(self.chk_touch)
-        c.add(_hint(_("night mode, image only and the log are on the top bar: "
-                      "they are touched during the night, not before it")))
         return c
 
     # ------------------------------------------------------------------ right
@@ -2147,9 +2192,9 @@ class MainWindow(QMainWindow):
         self.context.setMaximumHeight(210)
         self._ctx_index = {
             "frame": self.context.addWidget(self._ctx_frame()),
-            "targets": self.context.addWidget(self._ctx_targets()),
             "stack": self.context.addWidget(self._ctx_stack()),
             "lucky": self.context.addWidget(self._ctx_lucky()),
+            "targets": self.context.addWidget(self._ctx_targets()),
         }
         v.addWidget(self.context)
         self._right_col = w
@@ -2163,7 +2208,7 @@ class MainWindow(QMainWindow):
         self.lbl_goto_arrow.setFont(T_DISPLAY())
         self.lbl_goto_arrow.setAlignment(Qt.AlignCenter)
         c.add(self.lbl_goto_arrow)
-        self.lbl_goto_dir = QLabel(_("choose a target in TARGETS (2)"))
+        self.lbl_goto_dir = QLabel(_("choose a target in TARGETS (4)"))
         self.lbl_goto_dir.setFont(T_BODY())
         self.lbl_goto_dir.setWordWrap(True)
         c.add(self.lbl_goto_dir)
@@ -2666,8 +2711,48 @@ class MainWindow(QMainWindow):
         self._ic(self.btn_realign, "pause" if on else "target")
         self.btn_integrate.setEnabled(not on)
         self._flag("realign_on" if on else "realign_off")
-        if not on:
+        if on:
+            self._update_realign_goto()
+        else:
             self._update_realign_arrow(None)
+            self.lbl_realign_arrow.setVisible(False)
+            self.lbl_realign_dir.setVisible(False)
+
+    def _update_realign_goto(self) -> None:
+        """Coarse push-to from the phone, alongside the star-based arrow.
+
+        The star arrow needs stars in common with the reference, which a
+        platform reset can remove entirely — the frame ends up pointed
+        somewhere the reference never saw. The phone does not need any of
+        that: it only needs to know the target's coordinates and where it
+        itself currently points, so it is what still works for that first,
+        largest move back. `_pos` and `guide` are the same ones the FRAME
+        panel uses to get you onto a target the first time.
+        """
+        if not self.btn_realign.isChecked():
+            return
+        if self._target is None:
+            self.lbl_realign_arrow.setVisible(False)
+            self.lbl_realign_dir.setVisible(False)
+            return
+        self.lbl_realign_arrow.setVisible(True)
+        self.lbl_realign_dir.setVisible(True)
+        here = self._pos()
+        if here is None:
+            self.lbl_realign_arrow.setText("")
+            self.lbl_realign_dir.setFont(T_BODY())
+            self.lbl_realign_dir.setText(
+                _("align the sensor to compute the direction"))
+            return
+        g = guide(here, (self._target.ra, self._target.dec),
+                 self.sp_lat.value(), self.sp_lon.value(),
+                 elevation_m=self.sp_elev.value(), fov_deg=self._fov_deg())
+        self.lbl_realign_dir.setFont(T_XL())
+        self.lbl_realign_dir.setText(g.text)
+        color = self.pal.ok if g.on_target else self.pal.warn
+        self.lbl_realign_dir.setStyleSheet(f"color: {color}")
+        self.lbl_realign_arrow.setText(_arrow(g))
+        self.lbl_realign_arrow.setStyleSheet(f"color: {color}")
 
     # ======================================================= Moon and planets
     @property
@@ -2744,9 +2829,8 @@ class MainWindow(QMainWindow):
         """
         if not m.is_moon:
             px = m.disc_px(self.pixel_scale())
-            return _("{px:.0f} px across at {scale:.2f}\"/px — a barlow is what "
-                     "buys detail here, not exposure").format(
-                         px=px, scale=self.pixel_scale())
+            return _("{px:.0f} px across at {scale:.2f}\"/px").format(
+                px=px, scale=self.pixel_scale())
         frac = m.frame_fraction(self._fov_arcmin())
         return (_("disc {pct:.0f}% of the short side of the frame").format(
             pct=frac * 100) if frac <= 1.0 else
@@ -3366,6 +3450,27 @@ class MainWindow(QMainWindow):
         e = self.pixel_scale() / 60.0
         return e * w, e * h
 
+    def _target_bodies(self, when: datetime) -> list:
+        """The eight bodies at `when`, cached to the minute.
+
+        55 ms of ephemeris against the 12 ms the whole catalogue takes, and the
+        list recomputes on every filter change: without the cache the four
+        filters would each pay for a sky that has not moved.
+        """
+        key = (when.replace(second=0, microsecond=0), self.sp_lat.value(),
+               self.sp_lon.value(), self.sp_elev.value())
+        if self._bodies_key != key:
+            try:
+                self._bodies = lucky.bodies_at(
+                    self.sp_lat.value(), self.sp_lon.value(), when,
+                    elevation_m=self.sp_elev.value())
+            except Exception as e:
+                self.on_log(_("could not compute the planets: {error}").format(
+                    error=e))
+                self._bodies = []
+            self._bodies_key = key
+        return self._bodies
+
     def _refresh_targets(self, *_args) -> None:
         """Recompute the whole list, from the sky down.
 
@@ -3401,7 +3506,9 @@ class MainWindow(QMainWindow):
             cat.objs, sky, self.sp_lat.value(), fov_arcmin=fov,
             min_alt=self.sp_min_alt.value(), max_mag=self.sp_max_mag.value(),
             family=self.cb_family.currentData(),
-            fits_only=self.chk_fits.isChecked())
+            fits_only=self.chk_fits.isChecked(),
+            bodies=self._target_bodies(when),
+            arcsec_per_px=self.pixel_scale())
         self.targets.set_rows(rows)
         self._targets_t = time.monotonic()
         if self._view == "targets":
@@ -3437,13 +3544,16 @@ class MainWindow(QMainWindow):
         frac, sb = s.field_fraction, s.surface_brightness
         left = (_("all night") if np.isinf(s.minutes_left)
                 else _("{min:.0f} min").format(min=s.minutes_left))
-        fame = (_("Messier") if o.messier
-                else (_("has a name") if o.common else _("catalogue number")))
+        fame = (o.kind_label if s.body else
+                (_("Messier") if o.messier
+                 else (_("has a name") if o.common else _("catalogue number"))))
         for st, label, factor in (
                 (self.st_f_alt, _("altitude {alt:.0f}°").format(alt=s.alt),
                  f["altitude"]),
                 (self.st_f_window, left, f["window"]),
-                (self.st_f_moon, _("Moon {deg:.0f}°").format(deg=s.moon_sep),
+                (self.st_f_moon,
+                 _("Moon {deg:.0f}°").format(deg=s.moon_sep)
+                 if np.isfinite(s.moon_sep) else _("moonlight is no obstacle"),
                  f["moon"]),
                 (self.st_f_size, _("frame {pct:.0f}%").format(pct=frac * 100)
                  if frac else _("size unknown"), f["size"]),
@@ -3461,6 +3571,11 @@ class MainWindow(QMainWindow):
         return o.name, previews.cutout_fov(o.major_arcmin, self._fov_arcmin())
 
     def _request_preview(self, o) -> None:
+        if o.kind in ("Moon", "Planet"):
+            # A DSS cutout of where Jupiter is tonight is a picture of the stars
+            # behind it, taken decades ago.
+            self.preview.clear(_("no survey picture of a moving body"))
+            return
         if not self.chk_previews.isChecked():
             self.preview.clear(_("previews are off"))
             return
@@ -3508,7 +3623,7 @@ class MainWindow(QMainWindow):
         if not self.chk_previews.isChecked():
             self.on_log(_("previews are off — tick the box first"))
             return
-        rows = self.targets._rows
+        rows = [s for s in self.targets._rows if not s.body]
         want = [(s.obj, *self._preview_key(s.obj)) for s in rows]
         missing = [(o, n, f) for o, n, f in want
                    if self.preview_loader.cached(n, f) is None]
@@ -3529,6 +3644,12 @@ class MainWindow(QMainWindow):
         that is the screen with the arrow on it.
         """
         if s is None:
+            return
+        if s.body:
+            # Through the body path, not through the Obj: a planet moves, and
+            # what that sets up is the tracking that keeps the arrow on it.
+            self.cb_body.setCurrentIndex(self.cb_body.findData(s.body))
+            self._body_point()
             return
         self._apply_target(s.obj)
         self.ed_goto.setText(s.obj.label.split(" (")[0])
@@ -3721,6 +3842,7 @@ class MainWindow(QMainWindow):
         if now - getattr(self, "_goto_t", 0.0) > 0.2:
             self._goto_t = now
             self._update_goto()
+            self._update_realign_goto()
         if now - getattr(self, "_field_t", 0.0) > 2.0:
             self._field_t = now
             self._objects_in_field()
@@ -3752,7 +3874,7 @@ class MainWindow(QMainWindow):
         self.lbl_goto.setText(_("no target"))
         self.lbl_goto_arrow.setText("")
         self.lbl_goto_dir.setFont(T_BODY())
-        self.lbl_goto_dir.setText(_("choose a target in TARGETS (2)"))
+        self.lbl_goto_dir.setText(_("choose a target in TARGETS (4)"))
         self.btn_clear_target.setEnabled(False)
         self._refresh_align_pick(force=True)
         if self._view == "map":
@@ -4165,12 +4287,15 @@ class MainWindow(QMainWindow):
         elif info["distance"] < REALIGN_ON_TARGET_PX:
             self.realign_arrow.set_info(cx, cy, 0, 0, ok=True,
                                         on_target=True, color=p.ok,
-                                        label=_("on target"))
+                                        label="✔ " + _("on target"))
         else:
+            # No glyph here — the triangle itself already points the way;
+            # repeating the direction in unicode next to its own tip read as
+            # clutter rather than confirmation.
+            arcmin = info["distance"] * self.pixel_scale() / 60.0
             self.realign_arrow.set_info(
                 cx, cy, info["dx"], info["dy"], ok=True, on_target=False,
-                color=p.warn, label=_("{px:.0f}px").format(
-                    px=info["distance"]))
+                color=p.warn, label=_("{arcmin:.1f}'").format(arcmin=arcmin))
         self.realign_arrow.setVisible(True)
 
     @Slot(object, object, object, dict)
@@ -4551,13 +4676,6 @@ class MainWindow(QMainWindow):
         if min(med) <= 0:
             self.on_log(_("a channel has no signal — nothing to equalise"))
             return
-        # Manual balance only makes sense with the stretch linked across
-        # channels: unlinked, each channel is normalised on its own and undoes
-        # what the gain just did.
-        if not self.chk_linked.isChecked():
-            self.chk_linked.setChecked(True)
-            self.on_log(_("stretch linked across channels — that is what makes "
-                          "the per-channel gain visible"))
         for sl, m in zip((self.sl_r, self.sl_g, self.sl_b), med, strict=True):
             sl.setValue(int(round(np.clip(med[1] / m, 0.3, 3.0) * 100)))
         self.on_log(_("gains: {values}").format(
@@ -4639,25 +4757,18 @@ class MainWindow(QMainWindow):
             out = stretch.to_uint8(stretch.saturate(img, sat))
         else:
             out = np.empty(q.shape, np.uint8)
-            if self.chk_linked.isChecked():
-                c0, m = stretch.estimate_params(src.mean(axis=2), target, clip, 8)
-                for k in range(3):
-                    out[..., k] = stretch.build_lut(c0, m, white,
-                                                    gains[k])[q[..., k]]
-                self._black = c0
-            else:
-                blacks = []
-                for k in range(3):
-                    # The channel enters the estimate with its gain already
-                    # applied: measuring the shadow clip on the ungained signal
-                    # and applying it to the gained one cuts in the wrong place.
-                    channel = (src[..., k] * gains[k]
-                               if abs(gains[k] - 1) > 1e-3 else src[..., k])
-                    c0, m = stretch.estimate_params(channel, target, clip, 8)
-                    out[..., k] = stretch.build_lut(c0, m, white,
-                                                    gains[k])[q[..., k]]
-                    blacks.append(c0)
-                self._black = float(np.mean(blacks))
+            blacks = []
+            for k in range(3):
+                # The channel enters the estimate with its gain already
+                # applied: measuring the shadow clip on the ungained signal
+                # and applying it to the gained one cuts in the wrong place.
+                channel = (src[..., k] * gains[k]
+                           if abs(gains[k] - 1) > 1e-3 else src[..., k])
+                c0, m = stretch.estimate_params(channel, target, clip, 8)
+                out[..., k] = stretch.build_lut(c0, m, white,
+                                                gains[k])[q[..., k]]
+                blacks.append(c0)
+            self._black = float(np.mean(blacks))
             if abs(sat - 1.0) > 1e-3:
                 out = stretch.to_uint8(
                     stretch.saturate(out.astype(np.float32) / 255.0, sat))
@@ -4818,13 +4929,6 @@ def _tag(text: str) -> QLabel:
     lab = QLabel(text)
     lab.setObjectName("statLabel")
     lab.setFont(T_SMALL())
-    return lab
-
-
-def _hint(text: str) -> QLabel:
-    lab = QLabel(text)
-    lab.setFont(T_SMALL())
-    lab.setWordWrap(True)
     return lab
 
 

@@ -60,16 +60,17 @@ make gui            # or: astrodoro-gui
 
 The interface is organised by **task mode**, not by settings category: each
 phase of the night needs a different screen, and the mode rearranges both sides.
-The first three modes are the phases of a deep-sky night and the fourth is the
-handful of targets that play by different rules. There is no fifth: what you set once
-and then forget is not a phase of anything, so it lives in a window of its own.
+The first two are a deep-sky night, the third is the handful of targets that
+play by different rules, and the fourth is the list you consult between one
+object and the next. There is no fifth: what you set once and then forget is
+not a phase of anything, so it lives in a window of its own.
 
 | mode | key | panel | in the place of the image |
 | --- | --- | --- | --- |
 | Frame | `1` | phone sensor, which star to align on, camera source | live frame; target direction and objects in the field below |
-| Targets | `2` | hour, filters, target by name | the ranked list, with why each object scored what it did |
-| Integrate | `3` | stretch, per-channel gain, stacking, bias/dark/flat, recording, platform alignment | stack; histogram and residual rotation below |
-| Moon & planets | `4` | which body, where it is, exposure guard, burst, linear view | live frame; histogram, frame quality and the ephemeris below |
+| Integrate | `2` | stretch, per-channel gain, stacking, bias/dark/flat, recording, platform alignment | stack; histogram and residual rotation below |
+| Moon & planets | `3` | which body, where it is, exposure guard, burst, linear view | live frame; histogram, frame quality and the ephemeris below |
+| Targets | `4` | hour, filters, target by name | the ranked list, with why each object scored what it did |
 
 Above the vitals bar sits a **top bar** with what belongs to no phase: night
 mode (`N`), image only (`F`), the log (`L`), and **config** (`⌘,`) — folders,
@@ -223,6 +224,16 @@ with:
   Without it the first fifteen suggestions on a real evening were fifteen
   anonymous open clusters, high, small and moon-proof, and none of them is why
   anyone goes outside.
+
+**The Moon and the planets are in the same list**, from an ephemeris rather
+than from a catalogue — nothing catalogues a target that moves. They are scored
+on the same six factors, three of which mean something else for a body:
+moonlight costs a planet nothing (and the Moon does not shine on itself), every
+one of them is a target somebody drove out for, and size is not about the frame
+but about whether the image scale resolves the disc at all — Neptune is 1.5 px
+across at 1.53"/px, Jupiter 29. Choosing one points at it through its
+ephemeris, which keeps following it. The *Moon and planets* filter is the list
+on its own.
 
 Each suggestion also shows **what it looks like**: a DSS survey cutout with your
 own frame drawn on it, which answers "will it fit" faster than any pair of
