@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+from scipy.optimize import least_squares
+
+from astrodoro.pointing import brightstars as bs
+from astrodoro.pointing import orientation as o
+from astrodoro.pointing.model import Pointing
+from astrodoro.pointing.pushto import guide
+
+LAT, LON = -6.7003, -36.9436
+MOUNT = o.normalize(np.array([0.045, 1.0, 0.018]))
+
+
+def _sensor(alt, az):
+    target = o.altaz_to_enu(alt, az)
+
+    def residual(x):
+        return o.normalize(o.rotation_matrix(x[0], x[1], 0.0) @ MOUNT) - target
+
+    x = least_squares(residual, [(360.0 - az) % 360.0, alt], method="lm").x
+    return float(x[0]), float(x[1]), 0.0
+
+
+def _point_at(p, alt, az, t0, compass_error=None, gyro_offset=0.0):
+    for i in range(15):
+        a, b, g = _sensor(alt, az)
+        compass = None if compass_error is None else (a + compass_error) % 360.0
+        p.feed((a - gyro_offset) % 360.0, b, g, compass, t0 + i * 0.05)
+
+
+def test_following_the_arrow_converges():
+    visible = bs.visible(LAT, LON, min_alt=30.0)
+    if len(visible) < 6:
+        pytest.skip("the sky is too empty right now for this test")
+    ref = visible[0]
+    candidates = [
+        v
+        for v in visible[1:]
+        if 4.0
+        < o.separation(o.altaz_to_enu(v[1], v[2]), o.altaz_to_enu(ref[1], ref[2]))
+        < 25.0
+    ]
+    if not candidates:
+        pytest.skip("no star at a useful distance right now")
+    target = min(candidates, key=lambda v: v[0].mag)[0]
+
+    p = Pointing(LAT, LON)
+    _point_at(p, ref[1], ref[2], 0.0)
+    p.align_on(ref[0])
+    assert p.aligned
+
+    alt, az = ref[1], ref[2]
+    distances = []
+    for k in range(6):
+        _point_at(p, alt, az, 20 + k * 5)
+        g = guide(p.radec, (target.ra, target.dec), LAT, LON, fov_deg=0.9)
+        distances.append(g.separation_deg)
+        alt += g.delta_alt_deg * 0.8
+        az += g.delta_az_deg * 0.8
+
+    assert distances[1] < distances[0], (
+        f"the arrow moved away from the target: {distances[:2]}"
+    )
+    assert distances[-1] * 60 < 45.0, (
+        f"did not converge: {distances[-1] * 60:.1f}' at the end"
+    )
+
+
+def test_the_compass_does_not_move_the_sky_after_aligning():
+    visible = bs.visible(LAT, LON, min_alt=30.0)
+    if len(visible) < 3:
+        pytest.skip("the sky is too empty right now for this test")
+    ref = visible[0]
+    alt, az = ref[1] + 6.0, ref[2] + 9.0
+
+    ideal = Pointing(LAT, LON)
+    _point_at(ideal, ref[1], ref[2], 0.0)
+    ideal.align_on(ref[0])
+    _point_at(ideal, alt, az, 20.0)
+
+    phone = Pointing(LAT, LON)
+    _point_at(phone, ref[1], ref[2], 0.0, compass_error=8.0, gyro_offset=130.0)
+    phone.align_on(ref[0])
+    _point_at(phone, alt, az, 20.0, compass_error=8.0, gyro_offset=130.0)
+
+    assert phone.aligned and ideal.aligned
+    drift = o.separation(o.altaz_to_enu(*phone.altaz), o.altaz_to_enu(*ideal.altaz))
+    assert drift < 0.05, f"the compass moved the sky by {drift:.1f} degrees"
+
+
+def test_the_compass_still_positions_the_map_before_aligning():
+    p = Pointing(LAT, LON)
+    _point_at(p, 40.0, 120.0, 0.0, compass_error=0.0, gyro_offset=130.0)
+    _alt, az = p.altaz
+    assert abs((az - 120.0 + 180) % 360 - 180) < 4.0, az
+
+
+def test_without_an_alignment_no_position_is_invented():
+    p = Pointing(LAT, LON)
+    assert p.altaz is None and p.radec is None
+    _point_at(p, 40.0, 120.0, 0.0)
+    assert not p.aligned
+    assert p.altaz is not None
+
+
+def test_naming_a_target_pulls_the_suggestion_towards_it():
+    from astrodoro.core.catalog import angular_sep
+
+    blind = bs.for_alignment(LAT, LON, min_alt=20.0, limit=20)
+    if len(blind) < 3:
+        pytest.skip("fewer than three alignment stars up right now")
+
+    outsider = blind[-1].star
+    target = (outsider.ra, outsider.dec + 6.0)
+    aimed = bs.for_alignment(LAT, LON, target=target, min_alt=20.0, limit=20)
+
+    order_before = [p.star.label for p in blind]
+    order_after = [p.star.label for p in aimed]
+    assert order_after.index(outsider.label) < order_before.index(outsider.label), (
+        "naming a target beside it did not promote the star"
+    )
+
+    was = angular_sep(blind[0].star.ra, blind[0].star.dec, *target)
+    assert aimed[0].target_sep <= was
+
+
+def test_a_star_low_or_at_the_zenith_is_not_suggested_first():
+    picks = bs.for_alignment(LAT, LON, min_alt=25.0)
+    if not picks:
+        pytest.skip("no alignment star up right now")
+    assert all(p.alt >= 25.0 for p in picks), "suggested a star below the floor"
+    top = picks[0]
+    assert top.alt < 88.0 or len(picks) == 1
+
+
+def test_the_confusable_pair_loses_to_the_lone_star():
+    assert bs._f_isolation(0.5) < bs._f_isolation(3.0) < bs._f_isolation(12.0)
+    assert bs._f_isolation(12.0) == 1.0
+
+
+def test_brightness_only_breaks_ties():
+    assert bs._f_mag(0.03) == bs._f_mag(1.0) == 1.0
+    assert bs._f_mag(2.5) < bs._f_mag(1.5) < 1.0
+
+
+def test_no_target_means_no_distance_term():
+    picks = bs.for_alignment(LAT, LON, min_alt=20.0)
+    if not picks:
+        pytest.skip("no alignment star up right now")
+    assert all(np.isnan(p.target_sep) for p in picks)
+    assert bs._f_target(float("nan")) == 1.0

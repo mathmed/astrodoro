@@ -1,0 +1,63 @@
+# The venv is the project's own (`make setup`), so the hooks run the same
+# tools as `make lint` and CI, at the same versions.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        entry: .venv/bin/python -m ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: .venv/bin/python -m ruff format
+        language: system
+        types: [python]
+
+      - id: vulture
+        name: vulture (dead code)
+        entry: .venv/bin/vulture
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: bandit
+        name: bandit (security)
+        entry: .venv/bin/bandit -c pyproject.toml -r src/astrodoro -ll -q
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # One block sits at F: `worker.py::_apply_pending`. The average over the
+      # 929 blocks of the project is A, so this ceiling is there to stop a
+      # second one appearing, not to bless that one.
+      - id: xenon
+        name: xenon (complexity)
+        entry: .venv/bin/xenon src/astrodoro --max-absolute F --max-modules B
+               --max-average A
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy (types)
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: catalogue
+        name: message catalogue is current
+        entry: .venv/bin/python scripts/i18n.py check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: .venv/bin/python -m pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]

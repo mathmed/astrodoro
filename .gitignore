@@ -1,0 +1,75 @@
+# environment
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.egg-info/
+build/
+dist/
+
+# SVBony SDK and header: a third party binary, not ours to redistribute.
+# `make sdk` recreates it from a local installation.
+vendor/
+
+# Catalogue downloaded by script, too large for the repository.
+# `make catalog` recreates it.
+data/NGC.csv
+
+# Capture output. It defaults to ~/Astrodoro, but the folders are configurable
+# and a developer may point them back into the checkout.
+sessions/
+darks/
+flats/
+exports/
+
+# Legacy output folders: earlier versions wrote here, relative to the working
+# directory. Nothing does any more; kept so an upgraded checkout cannot commit
+# leftovers by accident.
+session/
+replay/
+captures/
+
+# Parameter dumps the SVBony SDK writes into the working directory.
+*_Cfg_*.bin
+
+# Compiled catalogues: `make i18n` builds them from the .po files, and the
+# wheel builds its own (hatch_build.py). The .po and the .pot are committed.
+*.mo
+
+# TLS certificate for the phone sensor. The private key belongs to one machine
+# and the certificate carries its IP; pointing/handset.py regenerates both.
+# They now live in the user data directory, but old checkouts may still have
+# them here.
+*.pem
+
+# Capture images and data in general
+*.fits
+*.fit
+*.fts
+*.npy
+*.ser
+*.png
+*.tif
+*.tiff
+!docs/**/*.png
+
+# Brand assets are repository content, not capture output. Negated per
+# extension rather than with `!assets/**`, which would also un-ignore
+# assets/.DS_Store — the last matching pattern wins.
+!assets/*.png
+!assets/*.tif
+!assets/*.tiff
+
+# The app icon the program loads at runtime: committed, because it ships
+# inside the wheel.
+!src/astrodoro/ui/assets/*.png
+
+# The map this repository keeps for Claude Code. Local to each clone.
+CLAUDE.md
+
+# Generated when a release is built: the icons come from ui/assets/icon.png.
+packaging/*.icns
+packaging/*.ico
+packaging/*.iconset/
