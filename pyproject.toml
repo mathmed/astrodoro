@@ -133,6 +133,10 @@ ignore = [
 "tests/*" = ["E501"]
 
 [tool.mypy]
+# No python_version here on purpose: it must match the interpreter the
+# checks run on. numpy's stubs differ between the version resolved for
+# 3.11 and the one for 3.12+, and pinning 3.11 makes mypy refuse to parse
+# the newer stub, which uses 3.12 syntax. CI runs every version instead.
 ignore_missing_imports = true
 files = ["src/astrodoro"]
 

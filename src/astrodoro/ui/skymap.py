@@ -225,7 +225,7 @@ class SkyMap(QWidget):
             return
         xy, vis = self._proj_many(self.lines.reshape(-1, 3))
         xy = xy.reshape(-1, 2, 2)
-        vis = vis.reshape(-1, 2).all(axis=1)
+        vis = np.asarray(vis.reshape(-1, 2).all(axis=1))
         p.setPen(QPen(self._color("border"), 1))
         for a, b in xy[vis]:
             p.drawLine(QPointF(a[0], a[1]), QPointF(b[0], b[1]))

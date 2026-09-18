@@ -13,51 +13,32 @@ permissions:
   contents: write
 
 jobs:
-  # Nothing is published from a tree that does not pass. The ci workflow runs
-  # the same checks on every push, but a tag can be cut from anywhere.
-  verify:
+  # Nothing is published from a tree that does not pass everything, on every
+  # interpreter and platform — the same job ci runs on each push.
+  checks:
+    uses: ./.github/workflows/checks.yml
+    with:
+      ref: ${{ github.event.inputs.tag || github.ref }}
+
+  version:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - name: system libraries for Qt
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 \
-            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
-      - run: pip install -e ".[dev]"
-      - name: the tag and the version have to agree
+      - name: the tag and __version__ have to agree
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import os, pathlib
           tag = os.environ["GITHUB_REF_NAME"].removeprefix("v")
-          src = pathlib.Path("src/astrodoro/__init__.py").read_text()
-          have = src.split('"')[1]
+          have = pathlib.Path("src/astrodoro/__init__.py").read_text().split('"')[1]
           assert tag == have, f"tag {tag} against __version__ {have}"
           print(f"{tag} agrees")
           PY
-      - name: lint
-        run: |
-          ruff check src tests scripts
-          ruff format --check src tests scripts
-          vulture
-          bandit -c pyproject.toml -r src/astrodoro -ll -q
-          xenon src/astrodoro --max-absolute F --max-modules B --max-average A
-          mypy
-          python scripts/i18n.py check
-      - name: test
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: pytest
 
   packages:
-    needs: verify
+    needs: [checks, version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +59,7 @@ jobs:
   # SVB_SDK_PATH, and on Windows and Linux there is no driver at all, so those
   # two builds are the interface, the replay source and the CLI.
   app:
-    needs: verify
+    needs: [checks, version]
     strategy:
       fail-fast: false
       matrix:

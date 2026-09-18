@@ -404,13 +404,14 @@ class Camera:
             sdk.GetVideoData(self._cid, buf, len(buf), int(timeout * 1000)),
         )
 
+        view = memoryview(buf)
         if t.bytes_per_pixel == 1:
-            arr = np.frombuffer(buf, dtype=np.uint8, count=g.width * g.height)
+            arr = np.frombuffer(view, dtype=np.uint8, count=g.width * g.height)
             return arr.reshape(g.height, g.width).copy()
         if t is ImgType.RGB24:
-            arr = np.frombuffer(buf, dtype=np.uint8, count=g.width * g.height * 3)
+            arr = np.frombuffer(view, dtype=np.uint8, count=g.width * g.height * 3)
             return arr.reshape(g.height, g.width, 3).copy()
-        arr = np.frombuffer(buf, dtype="<u2", count=g.width * g.height)
+        arr = np.frombuffer(view, dtype="<u2", count=g.width * g.height)
         return arr.reshape(g.height, g.width).copy()
 
     @property
