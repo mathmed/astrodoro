@@ -197,5 +197,6 @@ jobs:
             gh release upload "$TAG" release/* --clobber
           else
             gh release create "$TAG" release/* \
-              --title "Astrodoro $TAG" --notes-file notes.md --verify-tag
+              --title "Astrodoro $TAG" --notes-file notes.md --verify-tag \
+              --generate-notes
           fi
