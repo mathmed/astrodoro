@@ -73,3 +73,5 @@ CLAUDE.md
 packaging/*.icns
 packaging/*.ico
 packaging/*.iconset/
+
+# (test PR — linha adicionada pelo agente coder para validar o fluxo de abertura de PR)
