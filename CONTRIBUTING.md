@@ -1,4 +1,5 @@
 # Contributing to Astrodoro
+<!-- test: PR flow check -->
 
 This grew out of one telescope, one camera and one back garden, so the most
 useful contributions are usually **measurements from different hardware** and
