@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import time
 from dataclasses import dataclass
@@ -119,11 +120,12 @@ class Workspace:
 
 
 def cli_executable() -> str:
-    found = shutil.which("astrodoro", path=str(Path(sys.executable).parent))
+    scripts = sysconfig.get_path("scripts")
+    found = shutil.which("astrodoro", path=scripts)
     if found is None:
         raise SmokeError(
-            "the `astrodoro` entry point is not installed next to "
-            f"{sys.executable}; run `make setup` or `pip install -e .`"
+            f"the `astrodoro` entry point is not installed in {scripts}; "
+            "run `make setup` or `pip install -e .`"
         )
     return found
 
@@ -275,7 +277,9 @@ def main() -> int:
     print(f"smoke: astrodoro {__version__} on {sys.executable}")
     try:
         cli = cli_executable()
-        with tempfile.TemporaryDirectory(prefix="astrodoro-smoke-") as tmp:
+        with tempfile.TemporaryDirectory(
+            prefix="astrodoro-smoke-", ignore_cleanup_errors=True
+        ) as tmp:
             ws = Workspace(Path(tmp))
             check_liveness(cli, ws)
             write_settings(cli, ws)

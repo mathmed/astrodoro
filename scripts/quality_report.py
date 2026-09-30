@@ -47,6 +47,9 @@ ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # mutmut's progress spinner prints one braille frame per line.
 SPINNER_LINE = re.compile(r"^[⠀-⣿] .*(?:\n|$)", re.MULTILINE)
 SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9.]+")
+# Unbuffered, so stdout and stderr keep their order in the merged output, and
+# UTF-8, which is how the output is read back — also on Windows.
+CHILD_ENV = {"PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
 
 
 class Analysis(StrEnum):
@@ -846,6 +849,7 @@ def run_command(analysis: Analysis, command: list[str], directory: Path) -> int:
     try:
         process = subprocess.Popen(
             command,
+            env={**os.environ, **CHILD_ENV},
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
