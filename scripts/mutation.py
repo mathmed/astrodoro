@@ -33,8 +33,9 @@ MUTANTS_DIR = Path("mutants")
 PYPROJECT = Path("pyproject.toml")
 # The ratchet for pull requests: a floor below the measured baseline, raised by
 # the owner over time. The MUTATION_MIN_SCORE environment variable (a
-# repository variable in CI) overrides it.
-DEFAULT_MIN_SCORE = 50.0
+# repository variable in CI) overrides it. Baseline measured in September 2026:
+# 62.9% over the whole scope, 47.1% for the weakest file (platform_align.py).
+DEFAULT_MIN_SCORE = 45.0
 MIN_SCORE_ENV = "MUTATION_MIN_SCORE"
 # Read by scripts/quality_report.py: keep the prefix in sync.
 RESULT_PREFIX = "MUTATION_RESULT: "

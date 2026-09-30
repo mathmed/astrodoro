@@ -171,9 +171,12 @@ exactly one function so the two cannot drift apart.
 The layering is not only a convention: `make lint-imports` checks it with
 [import-linter](https://github.com/seddonym/import-linter) against the contracts
 in `pyproject.toml`, and CI fails when one breaks. `make smoke` boots the CLI,
-a replayed session and the GUI offscreen, so a change that passes the tests but
-does not start is caught too; `make mutation` runs mutmut over the decision
-logic, weekly in CI.
+a replayed session and the GUI offscreen on every platform CI covers, so a
+change that passes the tests but does not start is caught too. mutmut measures
+how well the tests pin down the decision logic: the whole scope weekly, and the
+functions a pull request changed on that pull request. Every pull request gets
+one *Quality Report* comment that gathers all of it — see
+[CONTRIBUTING.md](CONTRIBUTING.md#the-quality-report).
 
 The decisions that are easy to "simplify" back into a bug — and the camera
 quirks they compensate for — are listed in

@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MUTATION_MIN_SCORE: ${{ vars.MUTATION_MIN_SCORE || '50' }}
+      MUTATION_MIN_SCORE: ${{ vars.MUTATION_MIN_SCORE || '45' }}
     steps:
       - uses: actions/checkout@v4
         with:

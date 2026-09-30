@@ -79,4 +79,6 @@ mutants/
 
 # The Quality Report fragments scripts/quality_report.py writes in CI.
 quality-fragments/
+
+# Coverage data from `pytest --cov`, as CI runs it.
 .coverage
