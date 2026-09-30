@@ -12,4 +12,6 @@ touched one, say which and why.
 
 - [ ] `make lint` passes (ruff, plus the message catalogue check)
 - [ ] `make test` passes
+- [ ] `make smoke` passes (the CLI, a replay and the GUI boot for real)
+- [ ] `make lint-imports` passes, and no contract was relaxed
 - [ ] user-visible strings go through `_()` and `make i18n` was run

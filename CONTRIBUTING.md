@@ -11,10 +11,14 @@ git clone https://github.com/mathmed/astrodoro
 cd astrodoro
 uv sync --extra dev && uv pip install -e .
 
-make test     # pytest
-make lint     # ruff, vulture, bandit, xenon, mypy, i18n check — what CI runs
-make fmt      # the fixes ruff can make itself
-make hooks    # run the checks before each commit
+make test          # pytest
+make lint          # ruff, vulture, bandit, xenon, mypy, i18n check, import
+                   # contracts — what CI runs
+make lint-imports  # the layering contracts alone (import-linter)
+make smoke         # boot the CLI, a replayed session and the GUI, offscreen
+make mutation      # mutmut over the decision logic; slow, weekly in CI
+make fmt           # the fixes ruff can make itself
+make hooks         # run the checks before each commit
 ```
 
 The interpreter is always `.venv/bin/python` (`PY` in the Makefile), never the
@@ -56,6 +60,11 @@ imports `ui/`. **Nothing above `drivers/` touches an SDK or names a vendor** —
 go through `drivers.list_cameras()`, `drivers.camera()`, `drivers.open_camera()`
 and take `Bayer`, `ImgType`, `Geometry` and `CameraError` from `drivers.base`.
 Adding a manufacturer is a module under `drivers/` plus a line in `_DRIVERS`.
+
+`make lint-imports` enforces all of this: the contracts are in
+`[tool.importlinter]` in `pyproject.toml`, one per rule above. A change that
+breaks one changes the code, not the contract — relaxing a contract is an
+architecture decision and needs the owner's approval in the PR.
 
 ## Invariants that break silently
 
@@ -110,6 +119,22 @@ before adding one. **The suite must stay hardware-free** — CI runs it on Linux
 with no camera and no dylib. A check that needs the camera belongs behind a
 command in `astrodoro.cli.probe`, not in `tests/`.
 
+## Smoke and mutation testing
+
+`make smoke` runs `scripts/smoke.py`, which starts the program the way a user
+does, in a throwaway config, data and capture folder: `astrodoro --version`,
+`astrodoro settings --set ...`, a synthetic session written by the real
+`Recorder` and reprocessed with `astrodoro replay` into a `stack_final.fits`,
+and the `astrodoro-gui` entry point brought up offscreen until its window is
+shown. It fails on a non-zero exit, a timeout or a traceback, and prints that
+step's output. CI runs it on every pull request.
+
+`make mutation` runs [mutmut](https://github.com/boxed/mutmut) over the
+modules in `[tool.mutmut]` — the decision logic, not the pixel pipeline, the
+drivers or the front ends — with the tests that cover them. It needs `fork`,
+so not on Windows. CI runs it weekly and on demand (`mutation` workflow) and
+writes the score and the survivors to the run summary; it never blocks a PR.
+
 ## Translations
 
 Standard gettext through [Babel](https://babel.pocoo.org/), a dev dependency, so
@@ -133,5 +158,5 @@ missing.
 ## Pull requests
 
 - One topic per PR, and say what you measured.
-- `make lint` and `make test` pass.
+- `make lint`, `make test` and `make smoke` pass.
 - If you touched an invariant above, say which and why.

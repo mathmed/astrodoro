@@ -168,6 +168,13 @@ src/astrodoro/
 The GUI and the CLI call the same functions; calibration in particular lives in
 exactly one function so the two cannot drift apart.
 
+The layering is not only a convention: `make lint-imports` checks it with
+[import-linter](https://github.com/seddonym/import-linter) against the contracts
+in `pyproject.toml`, and CI fails when one breaks. `make smoke` boots the CLI,
+a replayed session and the GUI offscreen, so a change that passes the tests but
+does not start is caught too; `make mutation` runs mutmut over the decision
+logic, weekly in CI.
+
 The decisions that are easy to "simplify" back into a bug — and the camera
 quirks they compensate for — are listed in
 [CONTRIBUTING.md](CONTRIBUTING.md#invariants-that-break-silently).

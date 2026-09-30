@@ -9,6 +9,7 @@ BIAS    ?=
 DARK    ?=
 FLAT    ?=
 OUT     ?=
+BASE    ?= origin/main
 FOLDER  ?=
 
 TEMPARG := $(if $(TEMP),--target-temp $(TEMP),)
@@ -19,17 +20,17 @@ OUTARG  := $(if $(OUT),--out $(OUT),)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup sdk catalog gui probe info usb bench tec sensor bias dark \
-        flat run replay handset settings test lint hooks fmt i18n clean \
-        distclean
+        flat run replay handset settings test lint lint-imports smoke \
+        mutation mutation-changed hooks fmt i18n clean distclean
 
 help:  ## show this list
 	@echo "Astrodoro — capture and live stacking for EAA"
 	@echo
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-11s\033[0m %s\n", $$1, $$2}'
+	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "variables:  EXP=$(EXP)  GAIN=$(GAIN)  BIN=$(BIN)  FRAMES=$(FRAMES)"
-	@echo "            TEMP=  BIAS=  DARK=  FLAT=  OUT=  FOLDER="
+	@echo "            TEMP=  BIAS=  DARK=  FLAT=  OUT=  FOLDER=  BASE=$(BASE)"
 	@echo "example:    make dark EXP=5 GAIN=250 TEMP=-10"
 
 # --------------------------------------------------------------------- setup
@@ -106,6 +107,22 @@ lint: ## every check the pre-commit hooks run
 	$(PY) -m xenon src/astrodoro --max-absolute F --max-modules B --max-average A
 	$(PY) -m mypy
 	$(PY) scripts/i18n.py check
+	$(MAKE) lint-imports
+
+lint-imports: ## the layering contracts in pyproject.toml (import-linter)
+	.venv/bin/lint-imports
+
+smoke: ## boot the CLI, the pipeline and the GUI for real, offscreen
+	$(PY) scripts/smoke.py
+
+mutation: ## mutation testing of the whole [tool.mutmut] scope (slow)
+	QT_QPA_PLATFORM=offscreen $(PY) -m mutmut run
+	$(PY) scripts/mutation.py report > mutants/report.md
+	@sed -n '1,4p' mutants/report.md
+	@echo "full report: mutants/report.md; one mutant: .venv/bin/mutmut show <name>"
+
+mutation-changed: ## what a PR runs: mutate the functions changed against BASE
+	QT_QPA_PLATFORM=offscreen $(PY) scripts/mutation.py changed --base $(BASE)
 
 hooks: ## install the git hooks (pre-commit)
 	$(PY) -m pre_commit install --install-hooks
@@ -123,7 +140,7 @@ i18n: ## extract, merge into every .po, compile, then report what pt_BR lacks
 
 clean: ## remove caches
 	find . -name __pycache__ -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .pytest_cache .ruff_cache
+	rm -rf .pytest_cache .ruff_cache mutants
 
 distclean: clean ## also remove the venv and the downloaded data
 	rm -rf .venv vendor/lib data/NGC.csv
