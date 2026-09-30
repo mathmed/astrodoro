@@ -427,3 +427,30 @@ def test_render_writes_the_report(tmp_path):
     argv = ["render", "--dir", str(tmp_path / "fragments"), "--output", str(output)]
     assert qr.main(argv) == 0
     assert output.read_text(encoding="utf-8").startswith(qr.MARKER)
+
+
+def _survivor(k, function="guide", status="survived"):
+    diff = "--- a\n+++ b\n" + "-x\n+y\n" * 40
+    return qr.Survivor(
+        "src/p.py", function, status, f"p.x_{function}__mutmut_{k}", diff
+    )
+
+
+def test_many_survivors_group_by_function_and_keep_to_the_budget():
+    survivors = [_survivor(k) for k in range(80)] + [_survivor(0, "other", "no tests")]
+    outcome = qr.MutationOutcome(
+        False,
+        "",
+        50.0,
+        45.0,
+        81,
+        162,
+        [qr.FileScore("src/p.py", 162, 81, 50.0)],
+        survivors,
+    )
+    details = qr.mutation_details(outcome)
+    assert "| `src/p.py` | `guide` | 80 survived |" in details
+    assert "| `src/p.py` | `other` | 1 no tests |" in details
+    assert len(details) <= qr.MAX_DETAILS_CHARS
+    assert "more survivors without a diff here" in details
+    assert details.rstrip().endswith("`.venv/bin/mutmut show <name>`.")

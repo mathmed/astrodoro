@@ -203,7 +203,7 @@ def test_the_result_line_is_what_the_quality_report_reads(changed_report):
     assert finding.summary.startswith(
         "score 50.0% (ratchet 60%) · 1 of 2 mutants killed"
     )
-    assert f"| `{FILE}` | `Solver.solve` | survived |" in finding.details
+    assert f"| `{FILE}` | `Solver.solve` | 1 survived |" in finding.details
     assert "```diff\n-    a\n+    b\n```" in finding.details
 
 

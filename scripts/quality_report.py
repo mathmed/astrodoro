@@ -41,6 +41,8 @@ MAX_REPORT_CHARS = 60000
 REDUCED_DETAILS_CHARS = (1500, 0)
 MAX_SURVIVORS_LISTED = 30
 MAX_COVERAGE_ROWS = 10
+# Room kept for the "N more survivors" line after the diffs.
+SURVIVOR_NOTE_RESERVE = 120
 # Must match scripts/mutation.py, which prints this prefix and a JSON document.
 MUTATION_RESULT_PREFIX = "MUTATION_RESULT: "
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
@@ -531,6 +533,50 @@ class MutationOutcome:
         )
 
 
+def survivors_by_function(survivors: list[Survivor]) -> list[str]:
+    counts: dict[tuple[str, str], dict[str, int]] = {}
+    for s in survivors:
+        by_status = counts.setdefault((s.file, s.function), {})
+        by_status[s.status] = by_status.get(s.status, 0) + 1
+    rows = sorted(counts.items(), key=lambda item: -sum(item[1].values()))
+    listed = rows[:MAX_SURVIVORS_LISTED]
+    lines = ["| File | Function | Not killed |", "|---|---|---|"]
+    lines += [
+        f"| `{file}` | `{function}` | "
+        + ", ".join(f"{n} {status}" for status, n in sorted(by_status.items()))
+        + " |"
+        for (file, function), by_status in listed
+    ]
+    if len(rows) > len(listed):
+        lines.append(f"\n... and {len(rows) - len(listed)} more functions.")
+    return lines
+
+
+def survivor_diffs(survivors: list[Survivor], budget: int) -> list[str]:
+    lines: list[str] = []
+    shown = 0
+    budget -= SURVIVOR_NOTE_RESERVE
+    for survivor in (s for s in survivors if s.diff):
+        block = [
+            "",
+            f"`{survivor.name}`",
+            "```diff",
+            survivor.diff.replace("```", "'''"),
+            "```",
+        ]
+        size = sum(len(line) + 1 for line in block)
+        if size > budget:
+            break
+        budget -= size
+        shown += 1
+        lines += block
+    hidden = len(survivors) - shown
+    if hidden > 0:
+        more = plural(hidden, "more survivor", "more survivors")
+        lines += ["", f"{more} without a diff here: see the `mutation` job summary."]
+    return lines
+
+
 def mutation_details(outcome: MutationOutcome) -> str:
     lines = ["| File | Mutants | Killed | Score |", "|---|---:|---:|---:|"]
     lines += [
@@ -539,32 +585,16 @@ def mutation_details(outcome: MutationOutcome) -> str:
     ]
     if not outcome.survivors:
         return "\n".join(lines)
-    listed = outcome.survivors[:MAX_SURVIVORS_LISTED]
-    lines += [
-        "",
-        "**Survivors in the changed code**",
-        "",
-        "| File | Function | Status |",
-    ]
-    lines += ["|---|---|---|"]
-    lines += [f"| `{s.file}` | `{s.function}` | {s.status} |" for s in listed]
-    hidden = len(outcome.survivors) - len(listed)
-    if hidden > 0:
-        lines.append(f"\n... and {hidden} more: see the `mutation` job summary.")
-    for survivor in (s for s in listed if s.diff):
-        lines += [
-            "",
-            f"`{survivor.name}`",
-            "```diff",
-            survivor.diff.replace("```", "'''"),
-            "```",
-        ]
-    lines += [
+    lines += ["", "**Survivors in the changed code**", ""]
+    lines += survivors_by_function(outcome.survivors)
+    hint = [
         "",
         "Reproduce locally with `make mutation-changed`, "
         "then `.venv/bin/mutmut show <name>`.",
     ]
-    return "\n".join(lines)
+    used = sum(len(line) + 1 for line in lines + hint)
+    lines += survivor_diffs(outcome.survivors, MAX_DETAILS_CHARS - used)
+    return "\n".join(lines + hint)
 
 
 def analyze_mutation(fragment: Fragment) -> Finding:
