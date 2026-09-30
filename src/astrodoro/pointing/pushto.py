@@ -56,8 +56,8 @@ def guide(
     d_az = float(((tgt.az.deg - cur.az.deg + 180.0) % 360.0) - 180.0)
     sep = angular_sep(current[0], current[1], target[0], target[1])
 
-    tol = tolerance_deg if fov_deg is None else min(tolerance_deg, fov_deg * 0.25)
-    on = sep <= tol
+    tolerance = tolerance_deg if fov_deg is None else min(tolerance_deg, fov_deg * 0.25)
+    on = sep <= tolerance
     zenith = float(tgt.alt.deg) > 80.0
 
     if float(tgt.alt.deg) < 0:
@@ -68,13 +68,13 @@ def guide(
         text = _("on target — {arcmin:.1f}' from the centre").format(arcmin=sep * 60)
     else:
         bits = []
-        if abs(d_alt) > tol / 2:
+        if abs(d_alt) > tolerance / 2:
             bits.append(
                 _("up {amount}").format(amount=_fmt(abs(d_alt)))
                 if d_alt > 0
                 else _("down {amount}").format(amount=_fmt(abs(d_alt)))
             )
-        if abs(d_az) > tol / 2:
+        if abs(d_az) > tolerance / 2:
             bits.append(
                 _("turn {amount} west").format(amount=_fmt(abs(d_az)))
                 if d_az > 0
