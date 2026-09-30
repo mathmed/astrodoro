@@ -25,8 +25,8 @@ class Guidance:
     @property
     def arrow(self) -> tuple[float, float]:
         v = np.array([self.delta_az_deg, self.delta_alt_deg])
-        n = np.linalg.norm(v)
-        return (0.0, 0.0) if n < 1e-9 else tuple(v / n)
+        norm = np.linalg.norm(v)
+        return (0.0, 0.0) if norm < 1e-9 else tuple(v / norm)
 
 
 def guide(
