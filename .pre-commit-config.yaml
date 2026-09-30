@@ -47,6 +47,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: import-linter
+        name: import-linter (layering contracts)
+        entry: .venv/bin/lint-imports
+        language: system
+        types: [python]
+        pass_filenames: false
+
       - id: catalogue
         name: message catalogue is current
         entry: .venv/bin/python scripts/i18n.py check

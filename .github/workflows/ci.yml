@@ -5,12 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  # Lint, types, security, dead code, complexity, import contracts, the
+  # catalogue, the tests with coverage and the boot smoke, on every interpreter
+  # and platform (checks.yml).
   checks:
     uses: ./.github/workflows/checks.yml
 
   wheel:
     runs-on: ubuntu-latest
+    env:
+      REPORT: python scripts/quality_report.py run
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,12 +27,14 @@ jobs:
       # The wheel is where a packaging mistake shows up: the data files live
       # inside the package and .gitignore decides what hatchling ships.
       - name: build the wheel
+        id: build
         run: |
           python -m pip install --upgrade pip build
-          python -m build --wheel
+          $REPORT wheel-build -- python -m build --wheel
       - name: the package data has to be in it
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
-          python - <<'PY'
+          $REPORT wheel-data -- python - <<'PY'
           import glob, zipfile
           names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
           for want in ("astrodoro/ui/web/handset.html",
@@ -33,3 +43,120 @@ jobs:
               assert want in names, f"{want} missing from the wheel"
           print(f"{len(names)} files, package data present")
           PY
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: quality-fragment-wheel
+          path: quality-fragments/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Mutation testing of the functions this pull request changed inside the
+  # [tool.mutmut] scope, down to the function (scripts/mutation.py). Fails
+  # below MUTATION_MIN_SCORE, a ratchet under the measured baseline that the
+  # owner raises over time (repository variable: Settings > Secrets and
+  # variables > Actions > Variables). The whole scope runs weekly in
+  # mutation.yml. mutmut needs fork, so this runs on Linux alone.
+  mutation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MUTATION_MIN_SCORE: ${{ vars.MUTATION_MIN_SCORE || '45' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff against the base branch needs its history.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: system libraries for Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Exact key and no restore-keys on purpose: mutmut reuses the results it
+      # stored for unchanged code, so a stale cache could hide what a change
+      # to the tests did. It pays off on a re-run of the same commit.
+      - uses: actions/cache@v6
+        with:
+          path: mutants
+          key: mutants-${{ runner.os }}-${{ hashFiles('src/**', 'tests/**', 'pyproject.toml') }}
+
+      - name: mutation testing (changed functions in scope)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >-
+          python scripts/quality_report.py run mutation --
+          python scripts/mutation.py changed --base "origin/${{ github.base_ref }}"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: quality-fragment-mutation
+          path: quality-fragments/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # One comment per pull request, updated in place, that gathers what every
+  # job above found (scripts/quality_report.py). It only informs: each job is
+  # still the gate for its own checks.
+  quality-report:
+    if: always() && github.event_name == 'pull_request'
+    needs: [checks, wheel, mutation]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The minimum to create or update the comment. On a pull request from a
+      # fork the token is read-only: the comment step then warns instead of
+      # failing, and the report is still in this job's summary.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: quality-fragment-*
+          path: quality-fragments
+
+      - name: build the report
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          QUALITY_REPORT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/quality_report.py render \
+            --needs-json "$NEEDS_JSON" --output quality-report.md
+          cat quality-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: post the report on the pull request
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('quality-report.md', 'utf8');
+            const marker = '<!-- quality-report -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            try {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number,
+              });
+              const existing = comments.find(c => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+                return;
+              }
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            } catch (error) {
+              core.warning(`Could not post the Quality Report comment (read-only token on a fork pull request?): ${error.message}. The report is in the job summary.`);
+            }

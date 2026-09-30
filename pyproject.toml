@@ -52,6 +52,12 @@ dev = [
     # Python, so `make i18n` needs no system gettext — which macOS does not
     # ship.
     "babel>=2.18",
+    # Coverage is reported in CI (the Quality Report), not enforced.
+    "pytest-cov>=7.1",
+    "import-linter>=2.15",
+    # mutmut forks for every mutant and does not run on Windows, where the
+    # matrix still installs the dev extra.
+    "mutmut>=3.8.0; sys_platform != 'win32'",
 ]
 
 [project.urls]
@@ -89,6 +95,8 @@ packages = ["src/astrodoro"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# scripts/ is not a package; its tests import it from the repository root.
+pythonpath = ["."]
 addopts = "-q"
 filterwarnings = [
     # bin3/bin4 raise a deliberate RuntimeWarning; a test may exercise it.
@@ -149,3 +157,91 @@ paths = ["src/astrodoro"]
 # endpoints — the OpenNGC catalogue and the DSS cutout server — and there is no
 # user input in either.
 skips = ["B310"]
+
+# The layering CONTRIBUTING.md describes, as contracts `lint-imports` enforces.
+# Relaxing one — a new ignore_imports line, a layer moved, a module let off a
+# forbidden list — is an architecture change and needs the owner's approval.
+[tool.importlinter]
+root_package = "astrodoro"
+# Needed to forbid third-party packages (Qt) and not only our own modules.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "one-way layering: front ends > pointing > core > drivers > settings, i18n"
+type = "layers"
+layers = [
+    "astrodoro.ui | astrodoro.cli",
+    "astrodoro.pointing",
+    "astrodoro.core",
+    "astrodoro.drivers",
+    "astrodoro.settings | astrodoro.i18n",
+]
+
+[[tool.importlinter.contracts]]
+name = "the core, drivers, settings and i18n know nothing of Qt"
+type = "forbidden"
+source_modules = [
+    "astrodoro.core",
+    "astrodoro.drivers",
+    "astrodoro.settings",
+    "astrodoro.i18n",
+]
+forbidden_modules = ["PySide6", "pyqtgraph"]
+
+[[tool.importlinter.contracts]]
+name = "the CLI stays headless"
+type = "forbidden"
+source_modules = ["astrodoro.cli"]
+forbidden_modules = ["PySide6", "pyqtgraph"]
+
+[[tool.importlinter.contracts]]
+name = "in pointing, Qt lives in handset.py alone"
+type = "forbidden"
+source_modules = [
+    "astrodoro.pointing.brightstars",
+    "astrodoro.pointing.constellations",
+    "astrodoro.pointing.model",
+    "astrodoro.pointing.orientation",
+    "astrodoro.pointing.pushto",
+]
+forbidden_modules = ["PySide6", "pyqtgraph"]
+
+[[tool.importlinter.contracts]]
+name = "nothing above drivers names a vendor"
+type = "forbidden"
+source_modules = [
+    "astrodoro.core",
+    "astrodoro.pointing",
+    "astrodoro.ui",
+    "astrodoro.cli",
+]
+forbidden_modules = ["astrodoro.drivers.svbony"]
+# drivers.camera() imports the vendor module itself; that path is the point.
+allow_indirect_imports = true
+
+# Mutation testing over the decision logic only: which master applies, how the
+# polar error is read, how the Moon and planets are measured and cut, how the
+# sky is ranked and where the arrow points. The pixel pipeline (stars,
+# register, stacker) is numerics around OpenCV and sep with suites of tens of
+# seconds per run, and drivers, ui, cli, I/O and the embedded tables are not
+# rules. `make mutation` runs it; CI runs it weekly, never as a PR gate.
+[tool.mutmut]
+source_paths = ["src/"]
+only_mutate = [
+    "src/astrodoro/core/calibration.py",
+    "src/astrodoro/core/platform_align.py",
+    "src/astrodoro/core/lucky.py",
+    "src/astrodoro/core/lucky_stack.py",
+    "src/astrodoro/core/tonight.py",
+    "src/astrodoro/pointing/pushto.py",
+    "src/astrodoro/pointing/orientation.py",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/core/test_calibration.py",
+    "tests/core/test_platform_align.py",
+    "tests/core/test_lucky.py",
+    "tests/core/test_lucky_stack.py",
+    "tests/core/test_tonight.py",
+    "tests/pointing/test_pushto.py",
+    "tests/pointing/test_orientation.py",
+]
