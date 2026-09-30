@@ -260,7 +260,9 @@ def test_nothing_in_scope_changed_is_a_skip(summary, monkeypatch, capsys):
     monkeypatch.setattr(mutation, "changed_targets", lambda base, scope: [])
     assert mutation.changed_command("origin/main") == 0
     assert '"skipped": true' in capsys.readouterr().out
-    assert "No function in the mutation scope changed" in summary.read_text()
+    assert "No function in the mutation scope changed" in summary.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_changed_functions_without_mutants_are_a_skip(summary, monkeypatch, capsys):
@@ -287,7 +289,9 @@ def test_the_pr_run_gates_on_the_ratchet(
     monkeypatch.setattr(mutation, "collect", lambda _, patterns: {FILE: tally})
     assert mutation.changed_command("origin/main") == exit_code
     assert mutation.RESULT_PREFIX in capsys.readouterr().out
-    assert "Mutation testing (changed code in scope)" in summary.read_text()
+    assert "Mutation testing (changed code in scope)" in summary.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_the_full_report_needs_results(monkeypatch, tmp_path):
