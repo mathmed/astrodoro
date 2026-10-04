@@ -43,6 +43,32 @@ whole suite and most of the interface run without it.
 - **Qt enums use the Qt6 spelling** — `Qt.GlobalColor.transparent`, not
   `Qt.transparent`. PySide6 accepts both at runtime but types only the first.
 - **New tunable values become `Settings` fields**, not module constants.
+- **Reuse before creating.** Follow the existing pattern; look for a function,
+  module or dependency that already does it. Change shared code, update every
+  caller.
+- **Extend, don't modify; inject, don't reach.** A new camera is a new driver,
+  not a branch in an old one. Dependencies arrive through the constructor and
+  are mandatory — no `x: X | None = None` with a hidden fallback.
+- **Rules live in `core/` and `pointing/`**, as methods of the object they
+  describe, with no I/O. What crosses into `ui/` and `cli/` only carries data.
+- **Structured data is a dataclass**; a `dict` only as a last resort (the
+  worker's `request(**kw)` stays as it is).
+- **List what can arrive** — states, dates, values, a missing camera — and
+  handle each. Irreversible effects (overwriting a master, deleting a session)
+  happen once.
+- **Repeating is harmless.** A second click or a rerun command never duplicates
+  an effect: check the state first.
+- **Fail loudly.** Never swallow an exception; log the unexpected with
+  `logger.exception` and propagate or translate it. Only best-effort side
+  effects carry on, after logging.
+- **Nothing internal reaches the user**: no exception text, SDK or vendor name
+  or internal id in what the window or the CLI shows.
+- **The per-frame path is hot**: no call inside a loop that one call could
+  answer, and no slow work every frame pays for.
+- **Public contracts only grow.** Never remove or rename a CLI command or flag,
+  a `Settings` field or a file the session writes.
+- **Commits are Conventional Commits**: `feat`, `fix`, `refactor`, `chore`,
+  `test`, `docs`, `ci`, `build`.
 
 ## Layout
 
