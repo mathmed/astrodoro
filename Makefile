@@ -39,7 +39,7 @@ setup: ## create the venv, prepare the SDK and download the catalogue
 	$(MAKE) catalog
 	@echo "ready. 'make gui' to open it."
 
-sdk: ## copy and fix up the SVBony arm64 dylib (macOS only)
+sdk: ## refresh the SVBony arm64 dylib from AstroDMx (macOS only)
 	@if [ "$$(uname -s)" = "Darwin" ]; then scripts/setup_sdk.sh; else \
 	  echo "skipping the SDK: the vendor library is macOS only"; \
 	  echo "live capture needs it; replay and the tests do not."; fi
@@ -126,4 +126,4 @@ clean: ## remove caches
 	rm -rf .pytest_cache .ruff_cache
 
 distclean: clean ## also remove the venv and the downloaded data
-	rm -rf .venv vendor/lib data/NGC.csv
+	rm -rf .venv data/NGC.csv

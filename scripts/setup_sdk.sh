@@ -4,7 +4,9 @@
 # The macOS library in the indi-3rdparty repository is x86_64 only, which is
 # useless on Apple Silicon natively. The one shipped with AstroDMx is arm64 and
 # from the same SDK (v1.13.4 / API 3.0.0), so that is what development uses. For
-# distribution, get the official SDK from SVBony.
+# distribution, get the official SDK from SVBony. SVBony's public download
+# page only has the Linux and Windows SDKs, so the prepared copy is committed
+# in vendor/lib and this script only refreshes it.
 #
 # Two details that break everything if ignored:
 #  - the dylib references libusb through @executable_path/../Resources/lib, a
@@ -18,6 +20,10 @@ SRC="${SVB_SDK_SRC:-/Applications/AstroDMx Capture.app/Contents/Resources/lib}"
 DEST="$ROOT/vendor/lib"
 
 [ -f "$SRC/libSVBCameraSDK.dylib" ] || {
+  if [ -f "$DEST/libSVBCameraSDK.dylib" ]; then
+    echo "AstroDMx not found; using the copy committed in vendor/lib"
+    exit 0
+  fi
   echo "SDK not found in $SRC"
   echo "Set SVB_SDK_SRC to the folder holding libSVBCameraSDK.dylib."
   exit 1
