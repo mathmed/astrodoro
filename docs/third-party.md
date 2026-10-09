@@ -58,12 +58,11 @@ else in the feature depends on the service, and `core/previews.py` is one
 ## Vendor binaries
 
 The SVBony Camera SDK (`libSVBCameraSDK.dylib`, API 3.0.0 / lib v1.13.4) is
-proprietary and **not redistributed here**. `make sdk` takes the arm64 build from
-a local AstroDMx installation, rewrites its libusb path and re-signs it ad hoc;
-`vendor/` is gitignored. For distribution, obtain the SDK from SVBony directly.
-
-The indi-3rdparty macOS build is x86_64 only, which is useless on Apple Silicon
-natively — hence the AstroDMx route for development.
+proprietary. SVBony's public download page only offers the Linux and Windows
+SDKs, and the indi-3rdparty macOS build is x86_64 only, which is useless on
+Apple Silicon natively. An arm64 build of the same SDK, with its libusb path
+rewritten and both dylibs re-signed ad hoc, is committed in `vendor/lib`.
+`SVB_SDK_SRC=<folder> make sdk` refreshes it from another copy.
 
 ## Prior art this learned from
 

@@ -18,7 +18,7 @@ for mo in sorted(PKG.glob("i18n/locale/*/LC_MESSAGES/*.mo")):
 datas += collect_data_files("erfa")
 
 # The vendor SDK is not redistributable, so it is never bundled: the driver
-# looks for it at SVB_SDK_PATH, or where AstroDMx keeps it.
+# looks for it at SVB_SDK_PATH, or in vendor/lib.
 excludes = [
     "tkinter",
     "matplotlib",

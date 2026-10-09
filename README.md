@@ -60,9 +60,10 @@ make gui
 ```
 
 `make` with no target lists every shortcut. `make setup` also runs
-`scripts/setup_sdk.sh`, which takes the SDK from a local AstroDMx installation,
-rewrites its libusb path and re-signs it — on arm64, modifying a dylib
-invalidates its signature and dyld refuses to load it.
+`scripts/setup_sdk.sh`. The arm64 SDK is already committed in `vendor/lib`; to
+refresh it, point `SVB_SDK_SRC` at another copy and the script rewrites its
+libusb path and re-signs it — on arm64, modifying a dylib invalidates its
+signature and dyld refuses to load it.
 
 ## Use
 
