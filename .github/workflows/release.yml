@@ -171,7 +171,7 @@ jobs:
           | `astrodoro-*-macos-arm64.zip` | Apple Silicon. Unzip and move Astrodoro.app to Applications |
           | `astrodoro-*-windows-x86_64.zip` | Windows 10 and 11 |
           | `astrodoro-*-linux-x86_64.tar.gz` | glibc 2.35 and newer (Ubuntu 22.04 and newer) |
-          | `*.whl`, `*.tar.gz` | `pip install`, for any platform with Python 3.11+ |
+          | `*.whl`, `*.tar.gz` | `pip install`, for any platform with Python 3.12+ |
 
           Each bundle carries its own Python and Qt, so nothing else is needed
           to open the window, replay a recorded session or run the CLI.
