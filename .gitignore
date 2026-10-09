@@ -9,10 +9,6 @@ __pycache__/
 build/
 dist/
 
-# SVBony SDK and header: a third party binary, not ours to redistribute.
-# `make sdk` recreates it from a local installation.
-vendor/
-
 # Catalogue downloaded by script, too large for the repository.
 # `make catalog` recreates it.
 data/NGC.csv

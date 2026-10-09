@@ -10,7 +10,6 @@ from ..base import CameraError
 
 _LIBNAME = "libSVBCameraSDK.dylib"
 _VENDOR = Path(__file__).resolve().parents[4] / "vendor" / "lib"
-_ASTRODMX = Path("/Applications/AstroDMx Capture.app/Contents/Resources/lib")
 
 
 def _load() -> C.CDLL:
@@ -18,7 +17,7 @@ def _load() -> C.CDLL:
     candidates: list[Path] = []
     if os.environ.get("SVB_SDK_PATH"):
         candidates.append(Path(os.environ["SVB_SDK_PATH"]))
-    candidates += [_VENDOR / _LIBNAME, _ASTRODMX / _LIBNAME]
+    candidates.append(_VENDOR / _LIBNAME)
     for p in candidates:
         tried.append(str(p))
         if p.exists():

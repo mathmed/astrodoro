@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/mathmed/astrodoro/actions/workflows/ci.yml"><img src="https://github.com/mathmed/astrodoro/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <a href="https://github.com/mathmed/astrodoro/releases/latest"><img src="https://img.shields.io/github/v/release/mathmed/astrodoro?sort=semver" alt="latest release"></a>
-  <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue" alt="python">
+  <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="python">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="platform">
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue" alt="licence"></a>
 </p>
@@ -50,7 +50,7 @@ folder holding `libSVBCameraSDK.dylib`. On Windows and Linux there is no camera
 driver at all — those builds run the interface, the replay source and the CLI,
 which is enough to reprocess a night and to work on the code.
 
-From source, with Python 3.11+ and [uv](https://docs.astral.sh/uv/):
+From source, with Python 3.12+ and [uv](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/mathmed/astrodoro
@@ -60,9 +60,10 @@ make gui
 ```
 
 `make` with no target lists every shortcut. `make setup` also runs
-`scripts/setup_sdk.sh`, which takes the SDK from a local AstroDMx installation,
-rewrites its libusb path and re-signs it — on arm64, modifying a dylib
-invalidates its signature and dyld refuses to load it.
+`scripts/setup_sdk.sh`. The arm64 SDK is already committed in `vendor/lib`; to
+refresh it, point `SVB_SDK_SRC` at another copy and the script rewrites its
+libusb path and re-signs it — on arm64, modifying a dylib invalidates its
+signature and dyld refuses to load it.
 
 ## Use
 

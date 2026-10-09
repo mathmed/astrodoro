@@ -175,9 +175,9 @@ class MainWindow(QMainWindow):
         self._view = "stack"
         self._live = self._stack = None
         self._hist = FrameHistory()
-        self._bias_path = None
-        self._dark_path = None
-        self._flat_path = None
+        self._bias_path: str | None = None
+        self._dark_path: str | None = None
+        self._flat_path: str | None = None
         self._replay_folder = ""
         self._target = None
         self._catalog: Catalog | None = None

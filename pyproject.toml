@@ -6,7 +6,7 @@ name = "astrodoro"
 dynamic = ["version"]
 description = "Capture and live stacking for electronically assisted astronomy on macOS"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Mateus Medeiros" }]
 keywords = ["astronomy", "eaa", "live-stacking", "astrophotography", "svbony"]
@@ -106,7 +106,7 @@ filterwarnings = [
 [tool.ruff]
 line-length = 88
 src = ["src", "tests", "scripts"]
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -142,9 +142,8 @@ ignore = [
 
 [tool.mypy]
 # No python_version here on purpose: it must match the interpreter the
-# checks run on. numpy's stubs differ between the version resolved for
-# 3.11 and the one for 3.12+, and pinning 3.11 makes mypy refuse to parse
-# the newer stub, which uses 3.12 syntax. CI runs every version instead.
+# checks run on, and numpy's stubs can differ between versions. CI runs
+# every supported version instead.
 ignore_missing_imports = true
 files = ["src/astrodoro"]
 

@@ -130,7 +130,7 @@ and the `astrodoro-gui` entry point brought up offscreen until its window is
 shown. There is no HTTP API, so this is the "up and ready" check: each step
 fails on a non-zero exit, a timeout or a traceback, and prints its output. No
 camera, no phone and no network. CI runs it in every cell of the `checks`
-matrix — Linux on 3.11, 3.12 and 3.13, macOS and Windows — because a bundle
+matrix — Linux on 3.12 and 3.13, macOS and Windows — because a bundle
 ships for each of those platforms.
 
 `make lint-imports` checks the contracts in `[tool.importlinter]` (see
