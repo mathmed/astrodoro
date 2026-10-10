@@ -54,9 +54,9 @@ jobs:
           name: python-packages
           path: dist/*
 
-  # One bundle per platform. Live capture needs the SVBony SDK, which is not
-  # redistributable and is never bundled: on macOS the driver finds it through
-  # SVB_SDK_PATH, and on Windows and Linux there is no driver at all, so those
+  # One bundle per platform. Live capture needs the SVBony SDK, which only
+  # exists for macOS here: that bundle carries it from vendor/lib, and on
+  # Windows and Linux there is no driver at all, so those
   # two builds are the interface, the replay source and the CLI.
   app:
     needs: [checks, version]
@@ -116,6 +116,9 @@ jobs:
           fi
           "$bin" --version
           "$bin" settings | head -3
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ls dist/Astrodoro.app/Contents/Frameworks/svbony/libSVBCameraSDK.dylib
+          fi
 
       - name: name the archive
         id: archive
@@ -149,8 +152,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+      # Only what the release ships: the checks also upload their quality
+      # fragments as artifacts, and those are not downloads.
       - uses: actions/download-artifact@v4
         with:
+          name: python-packages
+          path: staging
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: astrodoro-*
           path: staging
       - name: gather and checksum
         run: |
@@ -176,10 +186,9 @@ jobs:
           Each bundle carries its own Python and Qt, so nothing else is needed
           to open the window, replay a recorded session or run the CLI.
 
-          **Live capture is macOS only, and needs the SVBony SDK.** The vendor
-          library is not redistributable, so it is not in any of these files:
-          install it separately and point `SVB_SDK_PATH` at the folder holding
-          `libSVBCameraSDK.dylib`. On Windows and Linux there is no camera
+          **Live capture is macOS only.** The macOS bundle carries the SVBony
+          SDK; `SVB_SDK_PATH` can point at another `libSVBCameraSDK.dylib`, or
+          the folder holding it. On Windows and Linux there is no camera
           driver at all — those builds run the interface, the replay source and
           the CLI.
 

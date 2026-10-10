@@ -44,9 +44,9 @@ carries its own Python and Qt: unpack it and run it.
 | `astrodoro-*-windows-x86_64.zip` | Windows 10 and 11 |
 | `astrodoro-*-linux-x86_64.tar.gz` | glibc 2.35 and newer |
 
-**Live capture is macOS only.** The SVBony SDK is not redistributable, so no
-download contains it: install it separately and point `SVB_SDK_PATH` at the
-folder holding `libSVBCameraSDK.dylib`. On Windows and Linux there is no camera
+**Live capture is macOS only.** The macOS download carries the SVBony SDK;
+`SVB_SDK_PATH` can point at another `libSVBCameraSDK.dylib`, or the folder
+holding it. On Windows and Linux there is no camera
 driver at all — those builds run the interface, the replay source and the CLI,
 which is enough to reprocess a night and to work on the code.
 

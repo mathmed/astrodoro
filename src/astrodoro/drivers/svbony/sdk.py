@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes as C
 import os
+import sys
 from collections.abc import Callable
 from enum import IntEnum
 from pathlib import Path
@@ -16,7 +17,11 @@ def _load() -> C.CDLL:
     tried: list[str] = []
     candidates: list[Path] = []
     if os.environ.get("SVB_SDK_PATH"):
-        candidates.append(Path(os.environ["SVB_SDK_PATH"]))
+        given = Path(os.environ["SVB_SDK_PATH"])
+        candidates.append(given / _LIBNAME if given.is_dir() else given)
+    if getattr(sys, "frozen", False):
+        # packaging/astrodoro.spec puts both dylibs here, next to each other
+        candidates.append(Path(getattr(sys, "_MEIPASS", "")) / "svbony" / _LIBNAME)
     candidates.append(_VENDOR / _LIBNAME)
     for p in candidates:
         tried.append(str(p))

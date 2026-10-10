@@ -17,8 +17,12 @@ for mo in sorted(PKG.glob("i18n/locale/*/LC_MESSAGES/*.mo")):
     datas.append((str(mo), f"astrodoro/i18n/locale/{mo.parents[1].name}/LC_MESSAGES"))
 datas += collect_data_files("erfa")
 
-# The vendor SDK is not redistributable, so it is never bundled: the driver
-# looks for it at SVB_SDK_PATH, or in vendor/lib.
+# The SVBony SDK only exists for macOS here, so only that bundle carries it.
+# Both dylibs go in one folder: the SDK finds libusb through @loader_path.
+binaries = []
+if sys.platform == "darwin":
+    binaries = [(str(p), "svbony") for p in sorted((ROOT / "vendor" / "lib").glob("*.dylib"))]
+
 excludes = [
     "tkinter",
     "matplotlib",
@@ -36,6 +40,7 @@ excludes = [
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
     pathex=[str(ROOT / "src")],
+    binaries=binaries,
     datas=datas,
     hookspath=[str(ROOT / "packaging" / "hooks")],
     hiddenimports=["sep", "astroalign", "astrodoro.cli", "astrodoro.ui"],
