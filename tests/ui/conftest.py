@@ -3,6 +3,17 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def no_preview_downloads(monkeypatch):
+    # Selecting an object asks hips2fits for its picture on a worker thread.
+    # Left to the network, that thread can still be in urlopen when the
+    # window is torn down, and on Windows the process dies with an access
+    # violation in the garbage collector.
+    from astrodoro.core import previews
+
+    monkeypatch.setattr(previews, "fetch", lambda *a, **k: None)
+
+
 @pytest.fixture
 def make_window(qapp, settings):
     from PySide6.QtCore import QEvent
