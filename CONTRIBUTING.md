@@ -310,3 +310,14 @@ missing.
 - No import contract, mutation scope or ratchet — the suppression baseline
   included — is relaxed without the owner's approval, asked for in the PR.
 - If you touched an invariant above, say which and why.
+- The description follows `.github/pull_request_template.md`, which GitHub
+  pre-fills: **Risk** first (level and one line of why, never below
+  `make risk-floor`), a one-sentence **Summary**, at most five **Behavior**
+  items in plain words as *before → after* with no file or code names,
+  **Unchanged**, **Look here** (the only place for file, function and test
+  pointers: the evidence for every Behavior item, pipeline changes, invariants
+  touched and what was measured), **Deploy steps** (always present; "None:
+  normal merge and deploy." when nothing is needed) and an honest **Not
+  verified** — anything that needs the camera, the phone or the real sky
+  belongs there unless you checked it on hardware.
+- Exactly one `risk:<level>` label, at or above the floor.
