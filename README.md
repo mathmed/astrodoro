@@ -192,7 +192,10 @@ Bug reports, measurements and patches are welcome — especially from anyone wit
 different hardware. This grew out of one telescope, one camera and one back
 garden, so a number measured on a different setup is the most useful thing
 anyone can send. Start at [CONTRIBUTING.md](CONTRIBUTING.md); security reports
-go through [SECURITY.md](SECURITY.md).
+go through [SECURITY.md](SECURITY.md). Coding agents follow the same rules: a
+`coder` agent implements on a branch and a separate `pr-writer` agent, which
+did not write the code, describes it and opens the PR — see
+[CONTRIBUTING.md](CONTRIBUTING.md#coding-agents-and-the-pull-request-flow).
 
 ## Licence
 

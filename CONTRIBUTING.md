@@ -302,6 +302,53 @@ engraved plate is unreadable below about 48 px, so small sizes come from the
 stroke glyph in `ui/icons.py`. `tests/ui/test_branding.py` fails if either goes
 missing.
 
+## Coding agents and the pull request flow
+
+Reading AI-written diffs is the bottleneck, so the PR description is written by
+an agent that did not write the code, and it tells the reviewer how much
+attention the PR deserves and what changed in behavior and in rules. Two
+Claude Code agents live in `.claude/agents/`:
+
+1. **`coder`** (`.claude/agents/coder.md`) implements the task on a
+   `claude/<slug>` branch with tests, runs `make lint`, `make test`,
+   `make smoke` (and `make mutation-changed` inside the mutation scope),
+   commits one logical step per commit, pushes and writes the **handoff
+   notes**. It does not open the PR and does not assess the risk. It never
+   commits to `main`.
+2. **`pr-writer`** (`.claude/agents/pr-writer.md`, Opus) gets the original
+   task verbatim, the branch, the base branch and the path of the handoff
+   notes. It reads the diff cold, commit by commit, fills
+   `.github/pull_request_template.md`, assigns the risk level (never below
+   `make risk-floor`, at least medium when there are deploy steps), opens the
+   PR with its `risk:<level>` label and stops. It never writes code. Behavior
+   items are plain language with no file, function, test or code references;
+   the evidence for each goes only in **Look here**, and a behavior without
+   evidence is listed under **Not verified** instead of getting an invented
+   pointer.
+3. **Fallback**: if `pr-writer` fails or cannot run, `coder` is told so and
+   opens the PR itself with a minimal body (summary plus the template headings,
+   risk "unassessed", no risk label), so a failure never blocks delivery. The
+   `risk-label` check stays red until a person sets the label.
+4. **Merge**: only the owner merges. Agents never merge, approve or enable
+   auto-merge.
+
+### Handoff notes
+
+`coder` writes them to `.handoff/<branch>.md` (every `/` of the branch name
+replaced with `-`; the directory is gitignored) after pushing. `pr-writer`
+checks them against the diff and reports a **Mismatch** when they disagree.
+Sections, in this order:
+
+- `## Task`: the original task, verbatim.
+- `## Done`: what changed and why, one line per item.
+- `## Decisions`: choices made, alternatives rejected, conservative options
+  taken on non-blocking doubts; invariants touched and numbers re-measured.
+- `## Deploy notes`: what a release needs — settings, session or master files
+  an older version wrote, a refreshed SDK dylib, a download, repository
+  settings, variables or secrets; or "None".
+- `## Not verified`: everything the author did not or could not check, and
+  why — the camera, the phone and the real sky above all; or "nothing".
+
 ## Pull requests
 
 - One topic per PR, and say what you measured.
