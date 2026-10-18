@@ -17,6 +17,8 @@ make lint              # ruff, vulture, bandit, xenon, mypy, i18n,
 make lint-imports      # the layering contracts alone (import-linter)
 make suppressions      # the suppression ratchet alone
 make suppressions-update  # lock in a lower baseline after a cleanup
+make risk-floor        # minimum risk level of the branch (BASE=origin/main)
+make risk-labels       # create the risk:<level> labels on GitHub (needs gh)
 make smoke             # boot the CLI, a replay and the GUI, offscreen
 make mutation          # mutmut over the decision logic; slow
 make mutation-changed  # mutmut over what the branch changed, as a PR
@@ -216,6 +218,46 @@ the `checks` matrix. What disables a check for a whole file or project —
 confidence — lives in `pyproject.toml` and is not counted here: changing it puts
 the pull request at the `high` risk floor (see
 [Risk floors and the risk label](#risk-floors-and-the-risk-label)).
+
+## Risk floors and the risk label
+
+Every pull request carries exactly one `risk:low`, `risk:medium`, `risk:high`
+or `risk:critical` label, assigned by the `pr-writer` agent when it opens the
+PR (see [Coding agents and the pull request flow](#coding-agents-and-the-pull-request-flow))
+or by whoever opens it by hand. Some files set a minimum:
+`.github/risk-floors.yaml` lists, per category, the globs that put a PR at
+least at that level.
+
+| Category | Level | Paths |
+| --- | --- | --- |
+| pipeline config | high | `pyproject.toml`, `uv.lock`, `.pre-commit-config.yaml`, `Makefile`, `suppressions-baseline.json`, `hatch_build.py`, `packaging/**`, `scripts/**`, `.github/**`, `.claude/**`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md` |
+| migrations and persistent formats | high | `**/migrations/**`, `settings.py`, `core/recorder.py`, `core/source.py`, `core/masters.py` |
+| auth and secrets | high | `**/*auth*`, `**/*permission*`, `**/*secret*`, `**/*credential*`, `pointing/handset.py` |
+| camera SDK bindings | high | `drivers/svbony/**`, `vendor/**` |
+| capture and stacking core | medium | `core/**`, `drivers/**`, `ui/worker.py` |
+
+There is no database here, so what plays the part of a migration is whatever a
+later version reads back from disk: the settings file, the recorded sessions
+replay opens, and the calibration masters matched by name and header. There is
+no login either; the phone link generates a TLS private key and serves on the
+local network. The SDK bindings are ctypes calls into a closed library that no
+CI runner can exercise.
+
+`make risk-floor` prints the floor of the current branch against `BASE` and the
+files behind it; the `pr-writer` agent runs the same command, so the agent and
+CI agree. The `risk-label` workflow runs `scripts/risk.py check` on every push
+and every label change and fails when the PR has no risk label, more than one,
+an unknown one, or one below the floor. It is a workflow of its own so that a
+label change does not re-run the matrix, and for that reason it is not in the
+Quality Report. The second floor (any deploy step other than "None" is at
+least `medium`) depends on the PR description, so only the agent applies it.
+
+The floor keeps a change to the pipeline from passing as a minor one: such a PR
+is labelled at least `high` and its pipeline changes are listed under **Look
+here**. It does not require anyone's approval in particular; merging stays with
+the owner. Lowering a level or dropping a path relaxes a gate and needs the
+owner's approval, asked for in the PR. `make risk-labels` creates the four
+labels (idempotent: `gh label create --force`).
 
 ## The Quality Report
 

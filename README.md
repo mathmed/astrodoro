@@ -177,7 +177,8 @@ change that passes the tests but does not start is caught too. mutmut measures
 how well the tests pin down the decision logic: the whole scope weekly, and the
 functions a pull request changed on that pull request. A ratchet fails the
 build when a `# noqa`, `# type: ignore` or skipped test appears that is not in
-the committed baseline. Every pull request gets
+the committed baseline, and each pull request needs a `risk:<level>` label no
+lower than the floor of the files it touches. Every pull request gets
 one *Quality Report* comment that gathers all of it — see
 [CONTRIBUTING.md](CONTRIBUTING.md#the-quality-report).
 

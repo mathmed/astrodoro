@@ -55,6 +55,9 @@ dev = [
     # Coverage is reported in CI (the Quality Report), not enforced.
     "pytest-cov>=7.1",
     "import-linter>=2.15",
+    # scripts/risk.py reads .github/risk-floors.yaml. pre-commit already pulls
+    # it in, but a direct import is a direct dependency.
+    "pyyaml>=6.0.3",
     # mutmut forks for every mutant and does not run on Windows, where the
     # matrix still installs the dev extra.
     "mutmut>=3.8.0; sys_platform != 'win32'",
