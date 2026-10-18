@@ -43,6 +43,9 @@ MAX_SURVIVORS_LISTED = 30
 MAX_COVERAGE_ROWS = 10
 # Must match scripts/mutation.py, which prints this prefix and a JSON document.
 MUTATION_RESULT_PREFIX = "MUTATION_RESULT: "
+# Must match scripts/suppressions.py, which prints this prefix and a JSON document.
+SUPPRESSIONS_RESULT_PREFIX = "SUPPRESSIONS_RESULT: "
+MAX_SUPPRESSION_CHANGES_LISTED = 30
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # mutmut's progress spinner prints one braille frame per line.
 SPINNER_LINE = re.compile(r"^[⠀-⣿] .*(?:\n|$)", re.MULTILINE)
@@ -59,6 +62,7 @@ class Analysis(StrEnum):
     BANDIT = "bandit"
     VULTURE = "vulture"
     XENON = "xenon"
+    SUPPRESSIONS = "suppressions"
     IMPORT_LINTER = "import-linter"
     CATALOGUE = "catalogue"
     PYTEST = "pytest"
@@ -165,6 +169,7 @@ SECTIONS = (
     Section("Security (bandit)", (Check(Analysis.BANDIT, "checks"),)),
     Section("Dead code (vulture)", (Check(Analysis.VULTURE, "checks"),)),
     Section("Complexity (xenon)", (Check(Analysis.XENON, "checks"),)),
+    Section("Suppressions (ratchet)", (Check(Analysis.SUPPRESSIONS, "checks"),)),
     Section("Architecture (import-linter)", (Check(Analysis.IMPORT_LINTER, "checks"),)),
     Section("Message catalogue (i18n)", (Check(Analysis.CATALOGUE, "checks"),)),
     Section("Tests and coverage (pytest)", (Check(Analysis.PYTEST, "checks"),)),
@@ -286,6 +291,102 @@ def analyze_xenon(fragment: Fragment) -> Finding:
         else "Complexity above the thresholds"
     )
     return Finding(Status.FAILED, summary, tail(output))
+
+
+@dataclass(frozen=True)
+class SuppressionChange:
+    path: str
+    kind: str
+    baseline: int
+    current: int
+    lines: list[int]
+
+    @property
+    def is_increase(self) -> bool:
+        return self.current > self.baseline
+
+
+@dataclass(frozen=True)
+class SuppressionOutcome:
+    total: int
+    totals: dict[str, int]
+    changes: list[SuppressionChange]
+
+    @property
+    def increases(self) -> list[SuppressionChange]:
+        return [change for change in self.changes if change.is_increase]
+
+    @classmethod
+    def parse(cls, output: str) -> SuppressionOutcome | None:
+        line = next(
+            (
+                line
+                for line in output.splitlines()
+                if line.startswith(SUPPRESSIONS_RESULT_PREFIX)
+            ),
+            None,
+        )
+        if line is None:
+            return None
+        data = json.loads(line.removeprefix(SUPPRESSIONS_RESULT_PREFIX))
+        return cls(
+            total=int(data["total"]),
+            totals={str(kind): int(count) for kind, count in data["totals"].items()},
+            changes=[SuppressionChange(**item) for item in data["changes"]],
+        )
+
+
+def suppression_changes_table(changes: list[SuppressionChange]) -> str:
+    listed = changes[:MAX_SUPPRESSION_CHANGES_LISTED]
+    rows = ["| File | Kind | Baseline → current | Lines |", "|---|---|---:|---|"]
+    rows += [
+        f"| `{c.path}` | {c.kind} | {c.baseline} → {c.current} | "
+        f"{', '.join(map(str, c.lines)) or '-'} |"
+        for c in listed
+    ]
+    hidden = len(changes) - len(listed)
+    if hidden > 0:
+        rows.append(f"\n... and {hidden} more: run `make suppressions` for the list.")
+    return "\n".join(rows)
+
+
+def analyze_suppressions(fragment: Fragment) -> Finding:
+    output = clean(fragment.output)
+    outcome = SuppressionOutcome.parse(output)
+    if outcome is None:
+        return Finding(
+            Status.FAILED,
+            "The suppression check failed before producing a result",
+            tail(output),
+        )
+    if outcome.increases:
+        added = sum(c.current - c.baseline for c in outcome.increases)
+        return Finding(
+            Status.FAILED,
+            f"{plural(added, 'new suppression', 'new suppressions')} "
+            "above the baseline",
+            suppression_changes_table(outcome.increases),
+            "New suppressions",
+            DetailsFormat.MARKDOWN,
+        )
+    if outcome.changes:
+        removed = sum(c.baseline - c.current for c in outcome.changes)
+        return Finding(
+            Status.FAILED,
+            f"{plural(removed, 'suppression', 'suppressions')} removed but still in "
+            "the baseline (`make suppressions-update`)",
+            suppression_changes_table(outcome.changes),
+            "Stale baseline",
+            DetailsFormat.MARKDOWN,
+        )
+    listing = "\n".join(f"{kind}: {count}" for kind, count in outcome.totals.items())
+    return Finding(
+        Status.OK,
+        f"{plural(outcome.total, 'suppression', 'suppressions')}, "
+        "matching the baseline",
+        listing,
+        "By kind",
+    )
 
 
 CONTRACTS_BLOCK = re.compile(
@@ -600,6 +701,7 @@ ANALYZERS: dict[Analysis, Callable[[Fragment], Finding]] = {
     Analysis.BANDIT: analyze_bandit,
     Analysis.VULTURE: analyze_vulture,
     Analysis.XENON: analyze_xenon,
+    Analysis.SUPPRESSIONS: analyze_suppressions,
     Analysis.IMPORT_LINTER: analyze_import_linter,
     Analysis.CATALOGUE: analyze_catalogue,
     Analysis.PYTEST: analyze_pytest,

@@ -54,6 +54,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      # No `types` filter: a change to the baseline alone must run it too.
+      - id: suppressions
+        name: suppression ratchet (suppressions-baseline.json)
+        entry: .venv/bin/python scripts/suppressions.py check
+        language: system
+        pass_filenames: false
+
       - id: catalogue
         name: message catalogue is current
         entry: .venv/bin/python scripts/i18n.py check

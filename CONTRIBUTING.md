@@ -13,8 +13,10 @@ uv sync --extra dev && uv pip install -e .
 
 make test              # pytest
 make lint              # ruff, vulture, bandit, xenon, mypy, i18n,
-                       # import contracts — what CI runs
+                       # suppressions, import contracts — what CI runs
 make lint-imports      # the layering contracts alone (import-linter)
+make suppressions      # the suppression ratchet alone
+make suppressions-update  # lock in a lower baseline after a cleanup
 make smoke             # boot the CLI, a replay and the GUI, offscreen
 make mutation          # mutmut over the decision logic; slow
 make mutation-changed  # mutmut over what the branch changed, as a PR
@@ -33,7 +35,8 @@ whole suite and most of the interface run without it.
 - **The source is English** — identifiers, comments, log messages — and carries
   **no comments and no docstrings**. The reasoning lives in the invariants
   below and in the tests named after them. The only text left in the source is
-  what a tool reads: `# noqa`, `# type: ignore`.
+  what a tool reads: `# noqa`, `# type: ignore` — and every one of those is
+  counted by the [suppression ratchet](#the-suppression-ratchet).
 - **User-visible strings go through `_()`** (`N_()` when deferred) with named
   `{placeholders}`, and `make i18n` after.
 - **If you change measured behaviour, measure it again** and update the number
@@ -174,6 +177,46 @@ workflow on demand to measure the new baseline before touching the ratchet.
 Read the survivors rather than chasing the number: some are equivalent
 mutants no test can kill.
 
+## The suppression ratchet
+
+`make suppressions` runs `scripts/suppressions.py`, which counts, per file and
+per kind, every way of silencing a check in `src/`, `scripts/`, `tests/`,
+`packaging/` and `hatch_build.py`:
+
+| Kind | Matches |
+| --- | --- |
+| `noqa` | `# noqa`, `# noqa: E501`, `# ruff: noqa` |
+| `type-ignore` | `# type: ignore`, `# type: ignore[code]` |
+| `nosec` | `# nosec` (bandit) |
+| `no-cover` | `# pragma: no cover`, `# pragma: no branch` |
+| `pylint-disable`, `mypy-directive`, `pyright-directive` | `# pylint: disable=...`, `# mypy: ...`, `# pyright: ...` |
+| `formatter-off` | `# fmt: off`, `# fmt: skip`, `# isort: skip_file`... |
+| `test-skip`, `test-xfail` | `pytest.mark.skip`/`skipif`/`xfail`, `pytest.skip()`/`importorskip()`/`xfail()`, `unittest.skip*`/`expectedFailure`, `self.skipTest()` |
+
+Comments are read with `tokenize` and tests with `ast`, so the same words inside
+a string do not count. The counts are compared with the committed
+`suppressions-baseline.json`, and any difference fails:
+
+- **a count went up** — a new suppression, or one moved to another file or
+  swapped for another kind. Remove it and fix the cause. Raising the baseline
+  (`.venv/bin/python scripts/suppressions.py update --allow-increase`) needs
+  the owner's approval, asked for in the PR, and shows up in its diff.
+- **a count went down** — the check fails until `make suppressions-update`
+  writes the lower baseline, committed in the same PR, so the improvement is
+  locked in where a reviewer sees it. `update` never raises a count.
+
+The baseline started at 12: two `# type: ignore` in `ui/` and ten
+`pytest.skip()` calls in the pointing and targets tests, which skip when the
+real sky at test time has no suitable star — they are a measurement of the
+night, not a silenced failure, but they are counted all the same.
+
+It runs in `make lint`, as a pre-commit hook and as a step of every cell of
+the `checks` matrix. What disables a check for a whole file or project —
+`[tool.ruff.lint] ignore` and `per-file-ignores`, bandit's `skips`, vulture's
+confidence — lives in `pyproject.toml` and is not counted here: changing it puts
+the pull request at the `high` risk floor (see
+[Risk floors and the risk label](#risk-floors-and-the-risk-label)).
+
 ## The Quality Report
 
 Every pull request gets one comment, *Quality Report*, updated in place on
@@ -184,8 +227,8 @@ after `checks`, `wheel` and `mutation` even when they fail, turns the
 fragments into the comment:
 
 - the table at the top has one line per analysis — ruff, mypy, bandit,
-  vulture, xenon, import-linter, the message catalogue, pytest with coverage,
-  the smoke, the wheel and mutation testing;
+  vulture, xenon, the suppression ratchet, import-linter, the message
+  catalogue, pytest with coverage, the smoke, the wheel and mutation testing;
 - *By platform* shows each check in each cell of the matrix, with its
   duration. When the platforms agree, a section quotes Linux on 3.12; when one
   fails, it names that platform and quotes its output;
@@ -222,6 +265,6 @@ missing.
 - One topic per PR, and say what you measured.
 - `make lint`, `make lint-imports`, `make test` and `make smoke` pass. This
   applies to coding agents exactly as to people.
-- No import contract, mutation scope or ratchet is relaxed without the owner's
-  approval, asked for in the PR.
+- No import contract, mutation scope or ratchet — the suppression baseline
+  included — is relaxed without the owner's approval, asked for in the PR.
 - If you touched an invariant above, say which and why.
