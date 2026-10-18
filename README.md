@@ -175,7 +175,10 @@ in `pyproject.toml`, and CI fails when one breaks. `make smoke` boots the CLI,
 a replayed session and the GUI offscreen on every platform CI covers, so a
 change that passes the tests but does not start is caught too. mutmut measures
 how well the tests pin down the decision logic: the whole scope weekly, and the
-functions a pull request changed on that pull request. Every pull request gets
+functions a pull request changed on that pull request. A ratchet fails the
+build when a `# noqa`, `# type: ignore` or skipped test appears that is not in
+the committed baseline, and each pull request needs a `risk:<level>` label no
+lower than the floor of the files it touches. Every pull request gets
 one *Quality Report* comment that gathers all of it — see
 [CONTRIBUTING.md](CONTRIBUTING.md#the-quality-report).
 
@@ -189,7 +192,10 @@ Bug reports, measurements and patches are welcome — especially from anyone wit
 different hardware. This grew out of one telescope, one camera and one back
 garden, so a number measured on a different setup is the most useful thing
 anyone can send. Start at [CONTRIBUTING.md](CONTRIBUTING.md); security reports
-go through [SECURITY.md](SECURITY.md).
+go through [SECURITY.md](SECURITY.md). Coding agents follow the same rules: a
+`coder` agent implements on a branch and a separate `pr-writer` agent, which
+did not write the code, describes it and opens the PR — see
+[CONTRIBUTING.md](CONTRIBUTING.md#coding-agents-and-the-pull-request-flow).
 
 ## Licence
 

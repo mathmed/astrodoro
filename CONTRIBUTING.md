@@ -13,8 +13,12 @@ uv sync --extra dev && uv pip install -e .
 
 make test              # pytest
 make lint              # ruff, vulture, bandit, xenon, mypy, i18n,
-                       # import contracts — what CI runs
+                       # suppressions, import contracts — what CI runs
 make lint-imports      # the layering contracts alone (import-linter)
+make suppressions      # the suppression ratchet alone
+make suppressions-update  # lock in a lower baseline after a cleanup
+make risk-floor        # minimum risk level of the branch (BASE=origin/main)
+make risk-labels       # create the risk:<level> labels on GitHub (needs gh)
 make smoke             # boot the CLI, a replay and the GUI, offscreen
 make mutation          # mutmut over the decision logic; slow
 make mutation-changed  # mutmut over what the branch changed, as a PR
@@ -33,7 +37,8 @@ whole suite and most of the interface run without it.
 - **The source is English** — identifiers, comments, log messages — and carries
   **no comments and no docstrings**. The reasoning lives in the invariants
   below and in the tests named after them. The only text left in the source is
-  what a tool reads: `# noqa`, `# type: ignore`.
+  what a tool reads: `# noqa`, `# type: ignore` — and every one of those is
+  counted by the [suppression ratchet](#the-suppression-ratchet).
 - **User-visible strings go through `_()`** (`N_()` when deferred) with named
   `{placeholders}`, and `make i18n` after.
 - **If you change measured behaviour, measure it again** and update the number
@@ -174,6 +179,86 @@ workflow on demand to measure the new baseline before touching the ratchet.
 Read the survivors rather than chasing the number: some are equivalent
 mutants no test can kill.
 
+## The suppression ratchet
+
+`make suppressions` runs `scripts/suppressions.py`, which counts, per file and
+per kind, every way of silencing a check in `src/`, `scripts/`, `tests/`,
+`packaging/` and `hatch_build.py`:
+
+| Kind | Matches |
+| --- | --- |
+| `noqa` | `# noqa`, `# noqa: E501`, `# ruff: noqa` |
+| `type-ignore` | `# type: ignore`, `# type: ignore[code]` |
+| `nosec` | `# nosec` (bandit) |
+| `no-cover` | `# pragma: no cover`, `# pragma: no branch` |
+| `pylint-disable`, `mypy-directive`, `pyright-directive` | `# pylint: disable=...`, `# mypy: ...`, `# pyright: ...` |
+| `formatter-off` | `# fmt: off`, `# fmt: skip`, `# isort: skip_file`... |
+| `test-skip`, `test-xfail` | `pytest.mark.skip`/`skipif`/`xfail`, `pytest.skip()`/`importorskip()`/`xfail()`, `unittest.skip*`/`expectedFailure`, `self.skipTest()` |
+
+Comments are read with `tokenize` and tests with `ast`, so the same words inside
+a string do not count. The counts are compared with the committed
+`suppressions-baseline.json`, and any difference fails:
+
+- **a count went up** — a new suppression, or one moved to another file or
+  swapped for another kind. Remove it and fix the cause. Raising the baseline
+  (`.venv/bin/python scripts/suppressions.py update --allow-increase`) needs
+  the owner's approval, asked for in the PR, and shows up in its diff.
+- **a count went down** — the check fails until `make suppressions-update`
+  writes the lower baseline, committed in the same PR, so the improvement is
+  locked in where a reviewer sees it. `update` never raises a count.
+
+The baseline started at 12: two `# type: ignore` in `ui/` and ten
+`pytest.skip()` calls in the pointing and targets tests, which skip when the
+real sky at test time has no suitable star — they are a measurement of the
+night, not a silenced failure, but they are counted all the same.
+
+It runs in `make lint`, as a pre-commit hook and as a step of every cell of
+the `checks` matrix. What disables a check for a whole file or project —
+`[tool.ruff.lint] ignore` and `per-file-ignores`, bandit's `skips`, vulture's
+confidence — lives in `pyproject.toml` and is not counted here: changing it puts
+the pull request at the `high` risk floor (see
+[Risk floors and the risk label](#risk-floors-and-the-risk-label)).
+
+## Risk floors and the risk label
+
+Every pull request carries exactly one `risk:low`, `risk:medium`, `risk:high`
+or `risk:critical` label, assigned by the `pr-writer` agent when it opens the
+PR (see [Coding agents and the pull request flow](#coding-agents-and-the-pull-request-flow))
+or by whoever opens it by hand. Some files set a minimum:
+`.github/risk-floors.yaml` lists, per category, the globs that put a PR at
+least at that level.
+
+| Category | Level | Paths |
+| --- | --- | --- |
+| pipeline config | high | `pyproject.toml`, `uv.lock`, `.pre-commit-config.yaml`, `Makefile`, `suppressions-baseline.json`, `hatch_build.py`, `packaging/**`, `scripts/**`, `.github/**`, `.claude/**`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md` |
+| migrations and persistent formats | high | `**/migrations/**`, `settings.py`, `core/recorder.py`, `core/source.py`, `core/masters.py` |
+| auth and secrets | high | `**/*auth*`, `**/*permission*`, `**/*secret*`, `**/*credential*`, `pointing/handset.py` |
+| camera SDK bindings | high | `drivers/svbony/**`, `vendor/**` |
+| capture and stacking core | medium | `core/**`, `drivers/**`, `ui/worker.py` |
+
+There is no database here, so what plays the part of a migration is whatever a
+later version reads back from disk: the settings file, the recorded sessions
+replay opens, and the calibration masters matched by name and header. There is
+no login either; the phone link generates a TLS private key and serves on the
+local network. The SDK bindings are ctypes calls into a closed library that no
+CI runner can exercise.
+
+`make risk-floor` prints the floor of the current branch against `BASE` and the
+files behind it; the `pr-writer` agent runs the same command, so the agent and
+CI agree. The `risk-label` workflow runs `scripts/risk.py check` on every push
+and every label change and fails when the PR has no risk label, more than one,
+an unknown one, or one below the floor. It is a workflow of its own so that a
+label change does not re-run the matrix, and for that reason it is not in the
+Quality Report. The second floor (any deploy step other than "None" is at
+least `medium`) depends on the PR description, so only the agent applies it.
+
+The floor keeps a change to the pipeline from passing as a minor one: such a PR
+is labelled at least `high` and its pipeline changes are listed under **Look
+here**. It does not require anyone's approval in particular; merging stays with
+the owner. Lowering a level or dropping a path relaxes a gate and needs the
+owner's approval, asked for in the PR. `make risk-labels` creates the four
+labels (idempotent: `gh label create --force`).
+
 ## The Quality Report
 
 Every pull request gets one comment, *Quality Report*, updated in place on
@@ -184,8 +269,8 @@ after `checks`, `wheel` and `mutation` even when they fail, turns the
 fragments into the comment:
 
 - the table at the top has one line per analysis — ruff, mypy, bandit,
-  vulture, xenon, import-linter, the message catalogue, pytest with coverage,
-  the smoke, the wheel and mutation testing;
+  vulture, xenon, the suppression ratchet, import-linter, the message
+  catalogue, pytest with coverage, the smoke, the wheel and mutation testing;
 - *By platform* shows each check in each cell of the matrix, with its
   duration. When the platforms agree, a section quotes Linux on 3.12; when one
   fails, it names that platform and quotes its output;
@@ -217,11 +302,69 @@ engraved plate is unreadable below about 48 px, so small sizes come from the
 stroke glyph in `ui/icons.py`. `tests/ui/test_branding.py` fails if either goes
 missing.
 
+## Coding agents and the pull request flow
+
+Reading AI-written diffs is the bottleneck, so the PR description is written by
+an agent that did not write the code, and it tells the reviewer how much
+attention the PR deserves and what changed in behavior and in rules. Two
+Claude Code agents live in `.claude/agents/`:
+
+1. **`coder`** (`.claude/agents/coder.md`) implements the task on a
+   `claude/<slug>` branch with tests, runs `make lint`, `make test`,
+   `make smoke` (and `make mutation-changed` inside the mutation scope),
+   commits one logical step per commit, pushes and writes the **handoff
+   notes**. It does not open the PR and does not assess the risk. It never
+   commits to `main`.
+2. **`pr-writer`** (`.claude/agents/pr-writer.md`, Opus) gets the original
+   task verbatim, the branch, the base branch and the path of the handoff
+   notes. It reads the diff cold, commit by commit, fills
+   `.github/pull_request_template.md`, assigns the risk level (never below
+   `make risk-floor`, at least medium when there are deploy steps), opens the
+   PR with its `risk:<level>` label and stops. It never writes code. Behavior
+   items are plain language with no file, function, test or code references;
+   the evidence for each goes only in **Look here**, and a behavior without
+   evidence is listed under **Not verified** instead of getting an invented
+   pointer.
+3. **Fallback**: if `pr-writer` fails or cannot run, `coder` is told so and
+   opens the PR itself with a minimal body (summary plus the template headings,
+   risk "unassessed", no risk label), so a failure never blocks delivery. The
+   `risk-label` check stays red until a person sets the label.
+4. **Merge**: only the owner merges. Agents never merge, approve or enable
+   auto-merge.
+
+### Handoff notes
+
+`coder` writes them to `.handoff/<branch>.md` (every `/` of the branch name
+replaced with `-`; the directory is gitignored) after pushing. `pr-writer`
+checks them against the diff and reports a **Mismatch** when they disagree.
+Sections, in this order:
+
+- `## Task`: the original task, verbatim.
+- `## Done`: what changed and why, one line per item.
+- `## Decisions`: choices made, alternatives rejected, conservative options
+  taken on non-blocking doubts; invariants touched and numbers re-measured.
+- `## Deploy notes`: what a release needs — settings, session or master files
+  an older version wrote, a refreshed SDK dylib, a download, repository
+  settings, variables or secrets; or "None".
+- `## Not verified`: everything the author did not or could not check, and
+  why — the camera, the phone and the real sky above all; or "nothing".
+
 ## Pull requests
 
 - One topic per PR, and say what you measured.
 - `make lint`, `make lint-imports`, `make test` and `make smoke` pass. This
   applies to coding agents exactly as to people.
-- No import contract, mutation scope or ratchet is relaxed without the owner's
-  approval, asked for in the PR.
+- No import contract, mutation scope or ratchet — the suppression baseline
+  included — is relaxed without the owner's approval, asked for in the PR.
 - If you touched an invariant above, say which and why.
+- The description follows `.github/pull_request_template.md`, which GitHub
+  pre-fills: **Risk** first (level and one line of why, never below
+  `make risk-floor`), a one-sentence **Summary**, at most five **Behavior**
+  items in plain words as *before → after* with no file or code names,
+  **Unchanged**, **Look here** (the only place for file, function and test
+  pointers: the evidence for every Behavior item, pipeline changes, invariants
+  touched and what was measured), **Deploy steps** (always present; "None:
+  normal merge and deploy." when nothing is needed) and an honest **Not
+  verified** — anything that needs the camera, the phone or the real sky
+  belongs there unless you checked it on hardware.
+- Exactly one `risk:<level>` label, at or above the floor.

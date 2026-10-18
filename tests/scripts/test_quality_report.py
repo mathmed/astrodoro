@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from scripts import quality_report as qr
+from scripts import suppressions
 
 qr.PRIMARY = qr.PRIMARY_PLATFORM
 WINDOWS = "windows-latest · py3.12"
@@ -68,6 +69,21 @@ FAIL config: exit code 2
 --- stderr
 usage: astrodoro settings
 """
+
+
+def _suppressions_output(changes, total=12):
+    payload = {
+        "total": total,
+        "baseline_total": 12,
+        "totals": {"type-ignore": 2, "test-skip": total - 2},
+        "changes": changes,
+    }
+    return f"Suppressions: {total} (baseline 12)\n" + (
+        qr.SUPPRESSIONS_RESULT_PREFIX + json.dumps(payload)
+    )
+
+
+SUPPRESSIONS_OK = _suppressions_output([])
 
 
 def _fragment(analysis, output, exit_code=0, platform=qr.PRIMARY, seconds=1.0):
@@ -249,6 +265,93 @@ def test_a_smoke_that_exits_0_without_the_ready_line_is_a_failure():
     assert finding.status == qr.Status.FAILED
 
 
+def test_suppressions_matching_the_baseline_list_the_totals_by_kind():
+    finding = qr.analyze_suppressions(
+        _fragment(qr.Analysis.SUPPRESSIONS, SUPPRESSIONS_OK)
+    )
+    assert finding.status == qr.Status.OK
+    assert finding.summary == "12 suppressions, matching the baseline"
+    assert finding.details == "type-ignore: 2\ntest-skip: 10"
+
+
+def test_new_suppressions_fail_and_name_the_file_kind_and_lines():
+    output = _suppressions_output(
+        [
+            {
+                "path": "src/astrodoro/core/stacker.py",
+                "kind": "noqa",
+                "baseline": 0,
+                "current": 2,
+                "lines": [10, 40],
+            },
+            {
+                "path": "tests/core/test_x.py",
+                "kind": "test-skip",
+                "baseline": 3,
+                "current": 1,
+                "lines": [5],
+            },
+        ],
+        total=12,
+    )
+    finding = qr.analyze_suppressions(_fragment(qr.Analysis.SUPPRESSIONS, output, 1))
+    assert finding.status == qr.Status.FAILED
+    assert finding.summary == "2 new suppressions above the baseline"
+    assert finding.details_format == qr.DetailsFormat.MARKDOWN
+    assert "| `src/astrodoro/core/stacker.py` | noqa | 0 → 2 | 10, 40 |" in (
+        finding.details
+    )
+    assert "test_x.py" not in finding.details
+
+
+def test_removed_suppressions_fail_until_the_baseline_is_lowered():
+    output = _suppressions_output(
+        [
+            {
+                "path": "src/astrodoro/ui/main.py",
+                "kind": "type-ignore",
+                "baseline": 1,
+                "current": 0,
+                "lines": [],
+            }
+        ],
+        total=11,
+    )
+    finding = qr.analyze_suppressions(_fragment(qr.Analysis.SUPPRESSIONS, output, 1))
+    assert finding.status == qr.Status.FAILED
+    assert finding.summary == (
+        "1 suppression removed but still in the baseline (`make suppressions-update`)"
+    )
+    assert "| `src/astrodoro/ui/main.py` | type-ignore | 1 → 0 | - |" in (
+        finding.details
+    )
+
+
+def test_a_long_list_of_suppression_changes_is_cut(monkeypatch):
+    monkeypatch.setattr(qr, "MAX_SUPPRESSION_CHANGES_LISTED", 1)
+    change = {"kind": "noqa", "baseline": 0, "current": 1, "lines": [1]}
+    output = _suppressions_output(
+        [{"path": "a.py", **change}, {"path": "b.py", **change}]
+    )
+    finding = qr.analyze_suppressions(_fragment(qr.Analysis.SUPPRESSIONS, output, 1))
+    assert "`b.py`" not in finding.details
+    assert finding.details.endswith(
+        "... and 1 more: run `make suppressions` for the list."
+    )
+
+
+def test_the_suppression_output_without_a_result_line_is_a_failure():
+    finding = qr.analyze_suppressions(
+        _fragment(qr.Analysis.SUPPRESSIONS, "Traceback", 1)
+    )
+    assert finding.status == qr.Status.FAILED
+    assert finding.summary == "The suppression check failed before producing a result"
+
+
+def test_the_suppression_prefix_matches_the_script_that_prints_it():
+    assert qr.SUPPRESSIONS_RESULT_PREFIX == suppressions.RESULT_PREFIX
+
+
 def test_the_mutation_output_without_a_result_line_is_a_failure():
     finding = qr.analyze_mutation(_fragment(qr.Analysis.MUTATION, "Traceback", 1))
     assert finding.summary == "mutmut failed before producing a score"
@@ -319,6 +422,7 @@ def _all_ok():
     outputs = {
         qr.Analysis.MYPY: "no issues found in 60 source files",
         qr.Analysis.CATALOGUE: "up to date (682 messages)",
+        qr.Analysis.SUPPRESSIONS: SUPPRESSIONS_OK,
         qr.Analysis.PYTEST: PYTEST_OK,
         qr.Analysis.IMPORT_LINTER: IMPORT_LINTER_OK,
         qr.Analysis.SMOKE: SMOKE_OK,

@@ -1,0 +1,17 @@
+{
+  "src/astrodoro/ui/main.py": {
+    "type-ignore": 1
+  },
+  "src/astrodoro/ui/worker.py": {
+    "type-ignore": 1
+  },
+  "tests/pointing/test_pushto.py": {
+    "test-skip": 6
+  },
+  "tests/ui/test_frame_panel.py": {
+    "test-skip": 1
+  },
+  "tests/ui/test_targets_panel.py": {
+    "test-skip": 3
+  }
+}

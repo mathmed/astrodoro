@@ -87,6 +87,14 @@ jobs:
           $REPORT xenon --
           xenon src/astrodoro --max-absolute F --max-modules B --max-average A
 
+      # Every noqa, type: ignore, nosec, coverage pragma and skipped test,
+      # counted per file against suppressions-baseline.json. Standard library
+      # only, so it costs a second; it runs everywhere like the rest because
+      # a release runs this workflow too.
+      - name: suppressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: $REPORT suppressions -- python scripts/suppressions.py check
+
       # Not pinned to one interpreter on purpose: the installed stubs follow
       # the interpreter, so this is the only way to see what each one sees.
       - name: mypy

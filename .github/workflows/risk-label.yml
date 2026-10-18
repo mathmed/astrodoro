@@ -1,0 +1,41 @@
+name: risk-label
+
+# Every pull request carries exactly one risk:<level> label, at or above the
+# floor of the files it touches (.github/risk-floors.yaml, evaluated by
+# scripts/risk.py). It lives outside ci.yml because it must also run when a
+# label changes, which would otherwise re-run the whole matrix; for the same
+# reason it is not part of the Quality Report. The pr-writer agent applies the
+# label when it opens the PR; `make risk-labels` creates the four labels.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: risk-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  risk-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The floor is measured against the merge base with the base branch.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PyYAML alone, not the dev extra: no Qt, no numpy, seconds instead of
+      # minutes. Pinned to the version in uv.lock.
+      - name: install
+        run: python -m pip install "pyyaml==6.0.3"
+      - name: the risk label is at or above the floor
+        env:
+          # Through the environment, never interpolated into the script.
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          BASE_REF: origin/${{ github.base_ref }}
+        run: python scripts/risk.py --base "$BASE_REF" check --labels-json "$PR_LABELS"

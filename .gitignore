@@ -78,3 +78,6 @@ quality-fragments/
 
 # Coverage data from `pytest --cov`, as CI runs it.
 .coverage
+
+# Handoff notes from the coder agent to the pr-writer agent (CONTRIBUTING.md).
+.handoff/

@@ -9,6 +9,7 @@ BIAS    ?=
 DARK    ?=
 FLAT    ?=
 OUT     ?=
+# Base branch of mutation-changed and risk-floor.
 BASE    ?= origin/main
 FOLDER  ?=
 
@@ -21,7 +22,8 @@ OUTARG  := $(if $(OUT),--out $(OUT),)
 .DEFAULT_GOAL := help
 .PHONY: help setup sdk catalog gui probe info usb bench tec sensor bias dark \
         flat run replay handset settings test lint lint-imports smoke \
-        mutation mutation-changed hooks fmt i18n clean distclean
+        mutation mutation-changed suppressions suppressions-update \
+        risk-floor risk-labels hooks fmt i18n clean distclean
 
 help:  ## show this list
 	@echo "Astrodoro — capture and live stacking for EAA"
@@ -107,6 +109,7 @@ lint: ## every check the pre-commit hooks run
 	$(PY) -m xenon src/astrodoro --max-absolute F --max-modules B --max-average A
 	$(PY) -m mypy
 	$(PY) scripts/i18n.py check
+	$(MAKE) suppressions
 	$(MAKE) lint-imports
 
 lint-imports: ## the layering contracts in pyproject.toml (import-linter)
@@ -123,6 +126,21 @@ mutation: ## mutation testing of the whole [tool.mutmut] scope (slow)
 
 mutation-changed: ## what a PR runs: mutate the functions changed against BASE
 	QT_QPA_PLATFORM=offscreen $(PY) scripts/mutation.py changed --base $(BASE)
+
+suppressions: ## fail when noqa, type: ignore, skips... differ from the baseline
+	$(PY) scripts/suppressions.py check
+
+suppressions-update: ## lower suppressions-baseline.json after a cleanup (never raises it)
+	$(PY) scripts/suppressions.py update
+
+risk-floor: ## minimum risk level of the branch against BASE (.github/risk-floors.yaml)
+	$(PY) scripts/risk.py --base $(BASE) floor
+
+risk-labels: ## create or update the risk:<level> labels on GitHub (needs gh)
+	gh label create "risk:low" --color 0E8A16 --description "Low risk: routine change" --force
+	gh label create "risk:medium" --color FBCA04 --description "Medium risk: deploy steps or wider impact" --force
+	gh label create "risk:high" --color D93F0B --description "High risk: pipeline config, persistent formats, secrets or SDK bindings" --force
+	gh label create "risk:critical" --color B60205 --description "Critical risk: needs the closest review" --force
 
 hooks: ## install the git hooks (pre-commit)
 	$(PY) -m pre_commit install --install-hooks
