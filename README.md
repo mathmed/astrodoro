@@ -150,6 +150,30 @@ The interface ships in **English** and **Brazilian Portuguese**
 (`astrodoro --lang pt_BR`). Adding a language means copying one `.po` file and
 translating it.
 
+## Critical surfaces
+
+A night under a clear sky cannot be repeated, so the only thing in this
+repository a change can break irrecoverably is the path that puts a night's
+frames on disk:
+
+- **Writing subs and bursts** (`core/recorder.py`, `Recorder` and `Burst`, and
+  the calls in `ui/worker.py` that feed them): each raw frame is written to
+  `subs/` of its own session folder, rejected or not; recording 1 in every N is
+  the only intended skip. A frame dropped or written with the wrong data is
+  lost for good.
+- **The session folder**: a new session never reuses an existing folder, and a
+  rename after the target changes only happens while `subs/` is still empty.
+  Breaking either can overwrite or scatter an earlier session.
+- **The final stack** (`write_stack` when capture stops): with recording off it
+  is the only thing a session leaves on disk.
+
+Nothing else qualifies. Astrodoro never deletes a capture. Calibration masters
+are overwritten by name, the settings file falls back to defaults when it
+cannot be read, and a session or master an older version wrote is read back,
+never rewritten: all of that costs time or a revert, not a night of data. The
+camera SDK bindings, the cooler ramp and the phone link's self-signed key can
+break capture (high at most) but do not destroy what is already on disk.
+
 ## Architecture
 
 ```
@@ -177,9 +201,8 @@ change that passes the tests but does not start is caught too. mutmut measures
 how well the tests pin down the decision logic: the whole scope weekly, and the
 functions a pull request changed on that pull request. A ratchet fails the
 build when a `# noqa`, `# type: ignore` or skipped test appears that is not in
-the committed baseline, and each pull request needs a `risk:<level>` label no
-lower than the floor of the files it touches. Every pull request gets
-one *Quality Report* comment that gathers all of it — see
+the committed baseline, and each pull request needs exactly one
+`risk:<level>` label. Every pull request gets one *Quality Report* comment that gathers all of it — see
 [CONTRIBUTING.md](CONTRIBUTING.md#the-quality-report).
 
 The decisions that are easy to "simplify" back into a bug — and the camera

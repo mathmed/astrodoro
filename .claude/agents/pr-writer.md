@@ -49,7 +49,7 @@ notes for yourself (they do not go in the PR):
 - **Evidence**: the test that asserts it (`path::test_name`) or, when no test does, the function that implements
   it (`path:function`). Open it and confirm it really asserts or implements that behavior. The pointer goes in
   **Look here**, never in Behavior.
-- **Risk signals**: files that match a risk floor; deploy needs (a settings, session or master format an older
+- **Risk signals**: what the change can break and whether a revert undoes it; deploy needs (a settings, session or master format an older
   version wrote, a refreshed SDK dylib, a new download, repository settings, variables or secrets); invariants
   from `CONTRIBUTING.md` touched; numbers the code, the README or `docs/` quote that changed; deleted, skipped or
   weakened tests, new suppressions, a lowered ratchet or a loosened import contract; irreversible effects
@@ -88,21 +88,30 @@ covers it. If you cannot find any evidence at all, do not invent a pointer: keep
 
 ### 5. Risk level
 
-You assign the risk; the author does not assess it, and any risk claim in the handoff notes is ignored.
+You assign the risk; the author does not assess it, and any risk claim in the handoff notes is ignored. The level
+is a judgement about what the change can break, not about which files it touches, and it defaults to **low** or
+**medium**: most PRs are one of the two, `high` is uncommon and `critical` rarer still.
 
-1. Get the file floor: `make risk-floor BASE=origin/<base>` (it reads `.github/risk-floors.yaml`). If it cannot
-   run, read the YAML file and match its globs against `git diff --name-only --no-renames` yourself.
-2. Judge the change itself:
-   - **low**: additive or behavior-preserving, covered by tests, trivial to roll back;
-   - **medium**: changes observable behavior of something that exists, touches code with many callers or the
-     capture and stacking path, or needs a deploy step;
-   - **high**: pipeline config, persistent formats (settings, sessions, masters), secrets, the camera SDK
-     bindings, an invariant from `CONTRIBUTING.md`, irreversible effects, or core rules with thin evidence;
-   - **critical**: a mistake could lose a night's captures or a user's masters or settings, damage hardware (the
-     cooler, the camera), expose the TLS key, or cannot be rolled back.
-3. The level is the highest of: your judgement, the file floor, and **medium** when Deploy steps is not "None".
-   Never go below a floor.
-4. The Risk line gives the level and one line of why, naming the floor category when one applied.
+- **low**: no behavior change a user can observe. Docs, tests, CI, formatting, dependency patch or minor bumps,
+  refactors covered by tests.
+- **medium**: new behavior behind an existing contract, a new option or setting, a new camera driver, or any
+  deploy step (Deploy steps is not "None").
+- **high**: can break the main capture or stacking flow, or changes existing behavior drastically, but a revert
+  recovers it.
+- **critical**: a failure loses user data or captures irrecoverably, and is hard to revert.
+
+1. Start from low or medium with the definitions above.
+2. Before choosing high or critical, read the "Critical surfaces" section of `README.md`: it lists what in this
+   repository can lose a night of captures. Critical needs the diff to touch one of those surfaces in a way that
+   can lose data; high needs a concrete way to break capture or stacking, or a drastic change of behavior.
+3. High or critical must be justified in the Risk line by **one concrete sentence naming what can break** (for
+   example: "a session started after a rename can write its subs into the previous session's folder and overwrite
+   them"). If you cannot write that sentence from the diff, lower the level.
+4. Touching pipeline files (`.github/`, `scripts/`, `Makefile`, `pyproject.toml`, `uv.lock`, `.claude/`,
+   `CONTRIBUTING.md`) is **not** by itself a reason for high: a broken pipeline is caught by CI and recovered by a
+   revert. Judge what the change does. A gate that is relaxed (a check switched off, a contract loosened) is listed
+   under **Look here**, not raised to high for that reason alone.
+5. The Risk line gives the level and one line of why.
 
 ### 6. Look here
 
@@ -147,7 +156,7 @@ Body: the template sections in order, in English, with the guidance comments rem
 - at most 5 Behavior items, in plain words, with no backticks, paths or code identifiers;
 - every Behavior item has a clickable pointer in Look here, or is listed under Not verified as lacking evidence;
 - no item says only which file changed;
-- the risk is not below the file floor, and is at least medium when there are deploy steps;
+- the risk is at least medium when there are deploy steps, and a high or critical risk names what can break;
 - no secrets, tokens, personal data, IP addresses or internal identifiers in the text.
 
 ### 10. Open the PR and label it

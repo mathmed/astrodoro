@@ -17,7 +17,6 @@ make lint              # ruff, vulture, bandit, xenon, mypy, i18n,
 make lint-imports      # the layering contracts alone (import-linter)
 make suppressions      # the suppression ratchet alone
 make suppressions-update  # lock in a lower baseline after a cleanup
-make risk-floor        # minimum risk level of the branch (BASE=origin/main)
 make risk-labels       # create the risk:<level> labels on GitHub (needs gh)
 make smoke             # boot the CLI, a replay and the GUI, offscreen
 make mutation          # mutmut over the decision logic; slow
@@ -215,49 +214,45 @@ night, not a silenced failure, but they are counted all the same.
 It runs in `make lint`, as a pre-commit hook and as a step of every cell of
 the `checks` matrix. What disables a check for a whole file or project —
 `[tool.ruff.lint] ignore` and `per-file-ignores`, bandit's `skips`, vulture's
-confidence — lives in `pyproject.toml` and is not counted here: changing it puts
-the pull request at the `high` risk floor (see
-[Risk floors and the risk label](#risk-floors-and-the-risk-label)).
+confidence — lives in `pyproject.toml` and is not counted here: changing it
+relaxes a gate, which needs the owner's approval, asked for in the PR, and is
+listed under **Look here**.
 
-## Risk floors and the risk label
+## The risk label
 
 Every pull request carries exactly one `risk:low`, `risk:medium`, `risk:high`
 or `risk:critical` label, assigned by the `pr-writer` agent when it opens the
 PR (see [Coding agents and the pull request flow](#coding-agents-and-the-pull-request-flow))
-or by whoever opens it by hand. Some files set a minimum:
-`.github/risk-floors.yaml` lists, per category, the globs that put a PR at
-least at that level.
+or by whoever opens it by hand. The level is a judgement about what the change
+can break, not something computed from the files it touches.
 
-| Category | Level | Paths |
-| --- | --- | --- |
-| pipeline config | high | `pyproject.toml`, `uv.lock`, `.pre-commit-config.yaml`, `Makefile`, `suppressions-baseline.json`, `hatch_build.py`, `packaging/**`, `scripts/**`, `.github/**`, `.claude/**`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md` |
-| migrations and persistent formats | high | `**/migrations/**`, `settings.py`, `core/recorder.py`, `core/source.py`, `core/masters.py` |
-| auth and secrets | high | `**/*auth*`, `**/*permission*`, `**/*secret*`, `**/*credential*`, `pointing/handset.py` |
-| camera SDK bindings | high | `drivers/svbony/**`, `vendor/**` |
-| capture and stacking core | medium | `core/**`, `drivers/**`, `ui/worker.py` |
+Most pull requests are `low` or `medium`; `high` is uncommon and `critical`
+rarer still:
 
-There is no database here, so what plays the part of a migration is whatever a
-later version reads back from disk: the settings file, the recorded sessions
-replay opens, and the calibration masters matched by name and header. There is
-no login either; the phone link generates a TLS private key and serves on the
-local network. The SDK bindings are ctypes calls into a closed library that no
-CI runner can exercise.
+| Level | When |
+| --- | --- |
+| low | No observable behavior change: docs, tests, CI, formatting, dependency patch or minor bumps, refactors covered by tests. |
+| medium | New behavior behind an existing contract, a new option or camera driver, or any deploy step. |
+| high | Can break the main capture or stacking flow, or changes existing behavior drastically; a revert recovers it. |
+| critical | A failure loses captures or user data irrecoverably and is hard to revert. |
 
-`make risk-floor` prints the floor of the current branch against `BASE` and the
-files behind it; the `pr-writer` agent runs the same command, so the agent and
-CI agree. The `risk-label` workflow runs `scripts/risk.py check` on every push
-and every label change and fails when the PR has no risk label, more than one,
-an unknown one, or one below the floor. It is a workflow of its own so that a
-label change does not re-run the matrix, and for that reason it is not in the
-Quality Report. The second floor (any deploy step other than "None" is at
-least `medium`) depends on the PR description, so only the agent applies it.
+A `high` or `critical` label is justified in the Risk line by one concrete
+sentence naming what can break; without it, the level goes down. Touching the
+pipeline (`.github/`, `scripts/`, the `Makefile`, `pyproject.toml`, `.claude/`)
+is not by itself a reason for `high`. What can lose a night of captures is
+listed under [Critical surfaces](README.md#critical-surfaces). The full rule
+is the risk step of `.claude/agents/pr-writer.md`.
 
-The floor keeps a change to the pipeline from passing as a minor one: such a PR
-is labelled at least `high` and its pipeline changes are listed under **Look
-here**. It does not require anyone's approval in particular; merging stays with
-the owner. Lowering a level or dropping a path relaxes a gate and needs the
-owner's approval, asked for in the PR. `make risk-labels` creates the four
-labels (idempotent: `gh label create --force`).
+Dependency bumps are born `low`. The repository has no
+`.github/dependabot.yml` yet; whoever adds one gives every `updates` entry
+`labels: ["risk:low"]`, so a Dependabot PR passes the check without a person
+labelling it (the label is raised by hand for a bump that changes behavior).
+
+The `risk-label` workflow runs `scripts/risk.py check` on every push and every
+label change and fails when the PR has no risk label, more than one, or an
+unknown one. It is a workflow of its own so that a label change does not re-run
+the matrix, and for that reason it is not in the Quality Report. `make
+risk-labels` creates the four labels (idempotent: `gh label create --force`).
 
 ## The Quality Report
 
@@ -318,8 +313,7 @@ Claude Code agents live in `.claude/agents/`:
 2. **`pr-writer`** (`.claude/agents/pr-writer.md`, Opus) gets the original
    task verbatim, the branch, the base branch and the path of the handoff
    notes. It reads the diff cold, commit by commit, fills
-   `.github/pull_request_template.md`, assigns the risk level (never below
-   `make risk-floor`, at least medium when there are deploy steps), opens the
+   `.github/pull_request_template.md`, assigns the risk level, opens the
    PR with its `risk:<level>` label and stops. It never writes code. Behavior
    items are plain language with no file, function, test or code references;
    the evidence for each goes only in **Look here**, and a behavior without
@@ -358,13 +352,12 @@ Sections, in this order:
   included — is relaxed without the owner's approval, asked for in the PR.
 - If you touched an invariant above, say which and why.
 - The description follows `.github/pull_request_template.md`, which GitHub
-  pre-fills: **Risk** first (level and one line of why, never below
-  `make risk-floor`), a one-sentence **Summary**, at most five **Behavior**
-  items in plain words as *before → after* with no file or code names,
-  **Unchanged**, **Look here** (the only place for file, function and test
+  pre-fills: **Risk** first (level and one line of why), a one-sentence
+  **Summary**, at most five **Behavior** items in plain words as *before →
+  after* with no file or code names, **Unchanged**, **Look here** (the only place for file, function and test
   pointers: the evidence for every Behavior item, pipeline changes, invariants
   touched and what was measured), **Deploy steps** (always present; "None:
   normal merge and deploy." when nothing is needed) and an honest **Not
   verified** — anything that needs the camera, the phone or the real sky
   belongs there unless you checked it on hardware.
-- Exactly one `risk:<level>` label, at or above the floor.
+- Exactly one `risk:<level>` label.
