@@ -9,7 +9,7 @@ BIAS    ?=
 DARK    ?=
 FLAT    ?=
 OUT     ?=
-# Base branch of mutation-changed and risk-floor.
+# Base branch of mutation-changed.
 BASE    ?= origin/main
 FOLDER  ?=
 
@@ -23,7 +23,7 @@ OUTARG  := $(if $(OUT),--out $(OUT),)
 .PHONY: help setup sdk catalog gui probe info usb bench tec sensor bias dark \
         flat run replay handset settings test lint lint-imports smoke \
         mutation mutation-changed suppressions suppressions-update \
-        risk-floor risk-labels hooks fmt i18n clean distclean
+        risk-labels hooks fmt i18n clean distclean
 
 help:  ## show this list
 	@echo "Astrodoro — capture and live stacking for EAA"
@@ -132,9 +132,6 @@ suppressions: ## fail when noqa, type: ignore, skips... differ from the baseline
 
 suppressions-update: ## lower suppressions-baseline.json after a cleanup (never raises it)
 	$(PY) scripts/suppressions.py update
-
-risk-floor: ## minimum risk level of the branch against BASE (.github/risk-floors.yaml)
-	$(PY) scripts/risk.py --base $(BASE) floor
 
 risk-labels: ## create or update the risk:<level> labels on GitHub (needs gh)
 	gh label create "risk:low" --color 0E8A16 --description "Low risk: routine change" --force

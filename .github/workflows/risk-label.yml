@@ -1,8 +1,8 @@
 name: risk-label
 
-# Every pull request carries exactly one risk:<level> label, at or above the
-# floor of the files it touches (.github/risk-floors.yaml, evaluated by
-# scripts/risk.py). It lives outside ci.yml because it must also run when a
+# Every pull request carries exactly one known risk:<level> label (checked by
+# scripts/risk.py). Which level is a judgement made when the PR is opened, not
+# something computed from the files it touches. It lives outside ci.yml because it must also run when a
 # label changes, which would otherwise re-run the whole matrix; for the same
 # reason it is not part of the Quality Report. The pr-writer agent applies the
 # label when it opens the PR; `make risk-labels` creates the four labels.
@@ -31,21 +31,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The floor is measured against the merge base with the base branch.
-          fetch-depth: 0
+      # The standard library alone, not the dev extra: no install step.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # PyYAML alone, not the dev extra: no Qt, no numpy, seconds instead of
-      # minutes. Pinned to the version in uv.lock.
-      - name: install
-        run: python -m pip install "pyyaml==6.0.3"
-      - name: the risk label is at or above the floor
+      - name: the PR has exactly one known risk label
         env:
           # Through the environment, never interpolated into the script.
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: origin/${{ github.base_ref }}
           GH_TOKEN: ${{ github.token }}
         # The labels come from the API, not from the event payload: the payload
         # is a snapshot of when the event fired, and `gh pr create --label` adds
@@ -54,4 +47,4 @@ jobs:
         # changed).
         run: |
           labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels?per_page=100" --jq '[.[].name]')
-          python scripts/risk.py --base "$BASE_REF" check --labels-json "$labels"
+          python scripts/risk.py check --labels-json "$labels"

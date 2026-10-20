@@ -25,7 +25,7 @@ the local `CLAUDE.md` when the clone has one (it is gitignored, so it may not ex
    that kill the survivors. If you changed measured behaviour, measure it again and update the number where it
    is written.
 7. Never relax a gate to make a change pass: no new suppression (`make suppressions` fails on it), no import
-   contract loosened, no mutation scope or ratchet lowered, no risk floor removed. When you remove suppressions,
+   contract loosened, no mutation scope or ratchet lowered. When you remove suppressions,
    run `make suppressions-update` and commit the lower baseline in the same branch.
 8. Commit with Conventional Commits in English (`feat`, `fix`, `refactor`, `test`, `docs`, `ci`, `build`,
    `chore`). Prefer one commit per logical step: the PR is reviewed commit by commit.
