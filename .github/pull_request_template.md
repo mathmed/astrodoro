@@ -1,8 +1,11 @@
 ## Risk
 **<low | medium | high | critical>** — <one line: why>
-<!-- Floor (.github/risk-floors.yaml, `make risk-floor`): pipeline config, persistent formats, auth and secrets and the
-camera SDK bindings are never below high; the capture and stacking core is never below medium. Any deploy step other
-than "None" is at least medium. The PR needs exactly one matching risk:<level> label. -->
+<!-- Most PRs are low or medium. low: no observable behavior change (docs, tests, CI, formatting, dependency
+patch/minor bumps, refactors covered by tests). medium: new behavior behind an existing contract, a new option or
+camera driver, or any deploy step. high: can break the main capture or stacking flow or changes behavior
+drastically, recoverable by revert. critical: a failure loses captures or user data irrecoverably and is hard to
+revert (see "Critical surfaces" in README.md). High and critical name what can break in one concrete sentence;
+without it, lower the level. Touching pipeline files is not by itself high. Exactly one risk:<level> label. -->
 
 ## Summary
 <one sentence: what changes in behavior, and why>

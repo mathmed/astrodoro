@@ -134,10 +134,10 @@ suppressions-update: ## lower suppressions-baseline.json after a cleanup (never 
 	$(PY) scripts/suppressions.py update
 
 risk-labels: ## create or update the risk:<level> labels on GitHub (needs gh)
-	gh label create "risk:low" --color 0E8A16 --description "Low risk: routine change" --force
-	gh label create "risk:medium" --color FBCA04 --description "Medium risk: deploy steps or wider impact" --force
-	gh label create "risk:high" --color D93F0B --description "High risk: pipeline config, persistent formats, secrets or SDK bindings" --force
-	gh label create "risk:critical" --color B60205 --description "Critical risk: needs the closest review" --force
+	gh label create "risk:low" --color 0E8A16 --description "Low risk: no observable behavior change" --force
+	gh label create "risk:medium" --color FBCA04 --description "Medium risk: new behavior, a new option or driver, or a deploy step" --force
+	gh label create "risk:high" --color D93F0B --description "High risk: can break capture or stacking; recoverable by revert" --force
+	gh label create "risk:critical" --color B60205 --description "Critical risk: can lose captures or user data irrecoverably" --force
 
 hooks: ## install the git hooks (pre-commit)
 	$(PY) -m pre_commit install --install-hooks

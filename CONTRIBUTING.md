@@ -226,6 +226,23 @@ PR (see [Coding agents and the pull request flow](#coding-agents-and-the-pull-re
 or by whoever opens it by hand. The level is a judgement about what the change
 can break, not something computed from the files it touches.
 
+Most pull requests are `low` or `medium`; `high` is uncommon and `critical`
+rarer still:
+
+| Level | When |
+| --- | --- |
+| low | No observable behavior change: docs, tests, CI, formatting, dependency patch or minor bumps, refactors covered by tests. |
+| medium | New behavior behind an existing contract, a new option or camera driver, or any deploy step. |
+| high | Can break the main capture or stacking flow, or changes existing behavior drastically; a revert recovers it. |
+| critical | A failure loses captures or user data irrecoverably and is hard to revert. |
+
+A `high` or `critical` label is justified in the Risk line by one concrete
+sentence naming what can break; without it, the level goes down. Touching the
+pipeline (`.github/`, `scripts/`, the `Makefile`, `pyproject.toml`, `.claude/`)
+is not by itself a reason for `high`. What can lose a night of captures is
+listed under [Critical surfaces](README.md#critical-surfaces). The full rule
+is the risk step of `.claude/agents/pr-writer.md`.
+
 The `risk-label` workflow runs `scripts/risk.py check` on every push and every
 label change and fails when the PR has no risk label, more than one, or an
 unknown one. It is a workflow of its own so that a label change does not re-run
