@@ -243,6 +243,11 @@ is not by itself a reason for `high`. What can lose a night of captures is
 listed under [Critical surfaces](README.md#critical-surfaces). The full rule
 is the risk step of `.claude/agents/pr-writer.md`.
 
+Dependency bumps are born `low`. The repository has no
+`.github/dependabot.yml` yet; whoever adds one gives every `updates` entry
+`labels: ["risk:low"]`, so a Dependabot PR passes the check without a person
+labelling it (the label is raised by hand for a bump that changes behavior).
+
 The `risk-label` workflow runs `scripts/risk.py check` on every push and every
 label change and fails when the PR has no risk label, more than one, or an
 unknown one. It is a workflow of its own so that a label change does not re-run
