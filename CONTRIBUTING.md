@@ -216,7 +216,7 @@ the `checks` matrix. What disables a check for a whole file or project —
 `[tool.ruff.lint] ignore` and `per-file-ignores`, bandit's `skips`, vulture's
 confidence — lives in `pyproject.toml` and is not counted here: changing it
 relaxes a gate, which needs the owner's approval, asked for in the PR, and is
-listed under **Look here**.
+said in the PR summary.
 
 ## The risk label
 
@@ -236,8 +236,8 @@ rarer still:
 | high | Can break the main capture or stacking flow, or changes existing behavior drastically; a revert recovers it. |
 | critical | A failure loses captures or user data irrecoverably and is hard to revert. |
 
-A `high` or `critical` label is justified in the Risk line by one concrete
-sentence naming what can break; without it, the level goes down. Touching the
+A `high` or `critical` label is justified by one line at the top of the PR
+description, one concrete sentence naming what can break; without it, the level goes down. Touching the
 pipeline (`.github/`, `scripts/`, the `Makefile`, `pyproject.toml`, `.claude/`)
 is not by itself a reason for `high`. What can lose a night of captures is
 listed under [Critical surfaces](README.md#critical-surfaces). The full rule
@@ -314,14 +314,12 @@ Claude Code agents live in `.claude/agents/`:
    task verbatim, the branch, the base branch and the path of the handoff
    notes. It reads the diff cold, commit by commit, fills
    `.github/pull_request_template.md`, assigns the risk level, opens the
-   PR with its `risk:<level>` label and stops. It never writes code. Behavior
-   items are plain language with no file, function, test or code references;
-   the evidence for each goes only in **Look here**, and a behavior without
-   evidence is listed under **Not verified** instead of getting an invented
-   pointer.
+   PR with its `risk:<level>` label and stops. It never writes code. It checks
+   every claim against the diff and the tests before writing it, and claims
+   nothing it could not find there.
 3. **Fallback**: if `pr-writer` fails or cannot run, `coder` is told so and
-   opens the PR itself with a minimal body (summary plus the template headings,
-   risk "unassessed", no risk label), so a failure never blocks delivery. The
+   opens the PR itself with a minimal body (a summary saying the risk is
+   unassessed, no risk label), so a failure never blocks delivery. The
    `risk-label` check stays red until a person sets the label.
 4. **Merge**: only the owner merges. Agents never merge, approve or enable
    auto-merge.
@@ -330,7 +328,8 @@ Claude Code agents live in `.claude/agents/`:
 
 `coder` writes them to `.handoff/<branch>.md` (every `/` of the branch name
 replaced with `-`; the directory is gitignored) after pushing. `pr-writer`
-checks them against the diff and reports a **Mismatch** when they disagree.
+checks them against the diff and adds one **Divergence** line when they
+disagree.
 Sections, in this order:
 
 - `## Task`: the original task, verbatim.
@@ -352,12 +351,14 @@ Sections, in this order:
   included — is relaxed without the owner's approval, asked for in the PR.
 - If you touched an invariant above, say which and why.
 - The description follows `.github/pull_request_template.md`, which GitHub
-  pre-fills: **Risk** first (level and one line of why), a one-sentence
-  **Summary**, at most five **Behavior** items in plain words as *before →
-  after* with no file or code names, **Unchanged**, **Look here** (the only place for file, function and test
-  pointers: the evidence for every Behavior item, pipeline changes, invariants
-  touched and what was measured), **Deploy steps** (always present; "None:
-  normal merge and deploy." when nothing is needed) and an honest **Not
-  verified** — anything that needs the camera, the phone or the real sky
-  belongs there unless you checked it on hardware.
+  pre-fills, and aims at 1,500 characters (2,500 at most) with no fact said
+  twice: a summary of one or two sentences that stands alone, at most one
+  visual chosen by the type of change (a *What | Before | After* table of up
+  to three rows in plain words, a small Mermaid diagram for a flow, a
+  before/after table of numbers, or a short `diff` block for a contract or
+  configuration) and a `Deploy:` line only when a release needs a real step.
+  The risk lives in the label; only `high` and `critical` add one line at the
+  top naming what can break. Anything important left unverified — the camera,
+  the phone or the real sky above all — is the last sentence of the summary.
+  No file or test lists, CI status, "None" filler or attribution footer.
 - Exactly one `risk:<level>` label.
